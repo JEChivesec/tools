@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Folio — Manuscript Archiver</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#13161b;
+    --bg-raised:#1b1f26;
+    --bg-raised-2:#1f242c;
+    --line:#2b313b;
+    --line-soft:#262b33;
+    --paper:#e7dec6;
+    --paper-2:#d9cca8;
+    --ink:#ece6d6;
+    --ink-dim:#9aa3ad;
+    --ink-faint:#5e6670;
+    --brass:#c98b3d;
+    --brass-bright:#e0a857;
+    --green:#7c9c6f;
+    --red:#c4604f;
+    --mono:'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    --serif:'Source Serif 4', Georgia, serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse at top, #181c23 0%, var(--bg) 55%);
+    color:var(--ink);
+    font-family:var(--serif);
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--brass); color:#1a1206; }
+  a{ color:var(--brass-bright); }
+
+  button{ font-family:var(--mono); }
+  input,select{ font-family:var(--mono); }
+
+  .wrap{
+    max-width:1180px;
+    margin:0 auto;
+    padding:28px 24px 60px;
+    animation:fadein .5s ease both;
+  }
+  @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  /* ---------- Header ---------- */
+  header.top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:24px;
+    padding-bottom:22px;
+    margin-bottom:24px;
+    border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .brand-mark{
+    width:34px; height:34px;
+    position:relative;
+    flex:none;
+  }
+  .brand-mark::before, .brand-mark::after{
+    content:"";
+    position:absolute;
+    background:var(--brass);
+  }
+  .brand-mark::before{
+    inset:0;
+    clip-path: polygon(0 18%, 40% 18%, 50% 0, 100% 0, 100% 100%, 0 100%);
+    opacity:.95;
+  }
+  .brand-mark::after{
+    left:3px; right:3px; top:9px; bottom:3px;
+    background:var(--bg-raised-2);
+  }
+  .brand-text h1{
+    margin:0;
+    font-family:var(--mono);
+    font-size:18px;
+    font-weight:700;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+  }
+  .brand-text p{
+    margin:2px 0 0;
+    font-size:12.5px;
+    color:var(--ink-dim);
+    font-family:var(--mono);
+    letter-spacing:.02em;
+  }
+
+  .stepper{
+    display:flex;
+    align-items:center;
+    gap:0;
+    font-family:var(--mono);
+    font-size:11.5px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+  .step-dot-group{ display:flex; align-items:center; gap:10px; }
+  .step-dot{
+    width:22px; height:22px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--ink-faint);
+    flex:none;
+    background:var(--bg-raised);
+    transition:border-color .2s, color .2s, background .2s;
+  }
+  .step-dot.active{ border-color:var(--brass); color:var(--brass-bright); }
+  .step-dot.done{ border-color:var(--green); color:var(--green); background:rgba(124,156,111,.12); }
+  .step-label{ color:var(--ink-faint); }
+  .step-label.active{ color:var(--ink); }
+  .step-sep{ width:26px; height:1px; background:var(--line); margin:0 2px; }
+
+  /* ---------- Layout ---------- */
+  main.grid{
+    display:grid;
+    grid-template-columns: 420px 1fr;
+    gap:22px;
+    align-items:start;
+  }
+  @media (max-width: 880px){
+    main.grid{ grid-template-columns: 1fr; }
+  }
+
+  .card{
+    background:var(--bg-raised);
+    border:1px solid var(--line);
+  }
+
+  .panel{ padding:22px; }
+  .panel h2{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--brass-bright);
+    margin:0 0 4px;
+  }
+  .panel .panel-sub{
+    font-size:13px;
+    color:var(--ink-dim);
+    margin:0 0 18px;
+    line-height:1.5;
+  }
+
+  .step-panel{ display:none; }
+  .step-panel.active{ display:block; }
+
+  /* ---------- Dropzone ---------- */
+  .dropzone{
+    border:1px dashed var(--line);
+    background:var(--bg-raised-2);
+    padding:34px 18px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--brass);
+    background:rgba(201,139,61,.06);
+  }
+  .dropzone-icon{
+    width:36px; height:28px;
+    margin:0 auto 14px;
+    position:relative;
+  }
+  .dropzone-icon::before{
+    content:"";
+    position:absolute; inset:0;
+    border:1.5px solid var(--ink-dim);
+    border-top:none;
+    clip-path: polygon(0 35%, 38% 35%, 46% 18%, 100% 18%, 100% 100%, 0 100%);
+  }
+  .dropzone p{ margin:0; font-size:13.5px; color:var(--ink-dim); font-family:var(--mono); }
+  .dropzone p.small{ font-size:11px; margin-top:6px; color:var(--ink-faint); }
+  .dropzone strong{ color:var(--ink); }
+
+  .file-info{
+    margin-top:14px;
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--ink-dim);
+    display:none;
+    padding:12px 14px;
+    background:var(--bg-raised-2);
+    border:1px solid var(--line-soft);
+  }
+  .file-info.show{ display:block; }
+  .file-info .fname{ color:var(--ink); }
+  .file-info .err{ color:var(--red); }
+  .file-info .ok{ color:var(--green); }
+
+  /* ---------- Form bits ---------- */
+  .field{ margin-bottom:18px; }
+  .field label.flabel{
+    display:block;
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--ink-dim);
+    margin-bottom:7px;
+  }
+  .field .fhint{
+    font-size:11.5px;
+    color:var(--ink-faint);
+    margin-top:6px;
+    font-family:var(--mono);
+  }
+  input[type=text], input[type=number], select{
+    width:100%;
+    background:var(--bg-raised-2);
+    border:1px solid var(--line);
+    color:var(--ink);
+    padding:9px 10px;
+    font-size:13px;
+    outline:none;
+  }
+  input[type=text]:focus, input[type=number]:focus, select:focus{
+    border-color:var(--brass);
+  }
+  select{ cursor:pointer; }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+  .check-row{
+    display:flex; align-items:center; gap:9px;
+    font-size:13px;
+    padding:6px 0;
+  }
+  .check-row input[type=checkbox]{
+    accent-color:var(--brass);
+    width:14px; height:14px;
+  }
+  .check-row label{ cursor:pointer; }
+  .checks-box{
+    max-height:160px;
+    overflow-y:auto;
+    padding:4px 10px;
+    background:var(--bg-raised-2);
+    border:1px solid var(--line-soft);
+  }
+
+  .manual-path{ display:flex; gap:8px; margin-top:8px; }
+  .manual-path input{ flex:1; }
+
+  button.btn{
+    font-size:12.5px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    padding:11px 16px;
+    background:var(--brass);
+    color:#1a1206;
+    border:none;
+    cursor:pointer;
+    font-weight:600;
+    transition:background .15s, opacity .15s;
+  }
+  button.btn:hover{ background:var(--brass-bright); }
+  button.btn:disabled{ opacity:.35; cursor:not-allowed; }
+  button.btn.ghost{
+    background:transparent;
+    color:var(--ink-dim);
+    border:1px solid var(--line);
+  }
+  button.btn.ghost:hover{ color:var(--ink); border-color:var(--ink-dim); background:transparent;}
+  button.btn.wide{ width:100%; }
+  .btn-row{ display:flex; gap:10px; margin-top:22px; }
+  .btn-row .btn{ flex:1; }
+
+  /* ---------- Tree panel ---------- */
+  .tree-card{
+    min-height:520px;
+    display:flex;
+    flex-direction:column;
+  }
+  .tree-head{
+    padding:18px 22px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .tree-head h2{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--brass-bright);
+    margin:0;
+  }
+  .tree-stats{
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--ink-faint);
+  }
+  .tree-body{
+    flex:1;
+    padding:18px 10px;
+    overflow-y:auto;
+    max-height:560px;
+  }
+  .tree-empty{
+    color:var(--ink-faint);
+    font-family:var(--mono);
+    font-size:13px;
+    text-align:center;
+    padding:60px 20px;
+    line-height:1.7;
+  }
+
+  .tree-line{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--ink-dim);
+    white-space:nowrap;
+    padding:1px 12px;
+  }
+  .tree-line.root{ color:var(--paper); font-weight:600; }
+  .tree-line .glyph{ color:var(--ink-faint); }
+
+  .folder-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-family:var(--mono);
+    font-size:12.5px;
+    padding:7px 12px;
+    margin:0 4px 4px;
+    background:var(--bg-raised-2);
+    border-left:2px solid var(--line);
+    transition:border-color .25s, background .25s;
+  }
+  .folder-row .tag{
+    flex:none;
+    width:22px;
+    text-align:center;
+    color:var(--brass);
+    font-weight:700;
+  }
+  .folder-row .name{
+    flex:1;
+    color:var(--paper);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .folder-row .meta{
+    flex:none;
+    color:var(--ink-faint);
+    font-size:11px;
+  }
+  .folder-row .mark{
+    flex:none;
+    width:16px;
+    text-align:center;
+    color:var(--ink-faint);
+  }
+  .folder-row.done{
+    border-left-color:var(--green);
+    background:rgba(124,156,111,.07);
+  }
+  .folder-row.done .mark{
+    color:var(--green);
+    animation:stamp .28s ease;
+  }
+  @media (prefers-reduced-motion: reduce){
+    .folder-row.done .mark{ animation:none; }
+    .wrap{ animation:none; }
+  }
+  @keyframes stamp{
+    0%{ transform:scale(1.8) rotate(-8deg); opacity:0; }
+    60%{ transform:scale(.9) rotate(2deg); opacity:1; }
+    100%{ transform:scale(1) rotate(0); }
+  }
+  .folder-row.index .tag{ color:var(--ink-dim); }
+  .more-row{
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--ink-faint);
+    padding:8px 16px;
+  }
+
+  .progress-wrap{
+    padding:16px 22px 20px;
+    border-top:1px solid var(--line);
+  }
+  .progress-label{
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--ink-dim);
+    margin-bottom:8px;
+    display:flex;
+    justify-content:space-between;
+  }
+  .progress-track{
+    height:4px;
+    background:var(--bg-raised-2);
+    border:1px solid var(--line-soft);
+  }
+  .progress-fill{
+    height:100%;
+    width:0%;
+    background:var(--brass);
+    transition:width .15s ease;
+  }
+
+  .summary-card{
+    background:var(--bg-raised-2);
+    border:1px solid var(--line-soft);
+    padding:14px 16px;
+    margin-bottom:18px;
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--ink-dim);
+    line-height:1.9;
+  }
+  .summary-card b{ color:var(--paper); }
+
+  .result-box{
+    display:none;
+    margin-top:18px;
+    padding:16px;
+    border:1px solid var(--green);
+    background:rgba(124,156,111,.08);
+  }
+  .result-box.show{ display:block; }
+  .result-box .rtitle{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--green);
+    margin-bottom:10px;
+  }
+  .result-box .rstats{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--ink-dim);
+    margin-bottom:14px;
+    line-height:1.8;
+  }
+
+  footer.note{
+    margin-top:28px;
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--ink-faint);
+    text-align:center;
+  }
+
+  .error-box{
+    display:none;
+    margin-top:14px;
+    padding:12px 14px;
+    border:1px solid var(--red);
+    background:rgba(196,96,79,.08);
+    color:#e3a99e;
+    font-family:var(--mono);
+    font-size:12.5px;
+    line-height:1.6;
+  }
+  .error-box.show{ display:block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div class="brand-text">
+        <h1>Folio</h1>
+        <p>Manuscript Archiver — JSON → chaptered folder archive</p>
+      </div>
+    </div>
+    <div class="stepper" id="stepper">
+      <div class="step-dot-group">
+        <div class="step-dot active" id="dot-1">1</div>
+        <span class="step-label active" id="lbl-1">Upload</span>
+      </div>
+      <div class="step-sep"></div>
+      <div class="step-dot-group">
+        <div class="step-dot" id="dot-2">2</div>
+        <span class="step-label" id="lbl-2">Configure</span>
+      </div>
+      <div class="step-sep"></div>
+      <div class="step-dot-group">
+        <div class="step-dot" id="dot-3">3</div>
+        <span class="step-label" id="lbl-3">Export</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="grid">
+
+    <!-- LEFT: control panel -->
+    <div class="card panel">
+
+      <!-- STEP 1 -->
+      <div class="step-panel active" id="panel-1">
+        <h2>01 — Upload</h2>
+        <p class="panel-sub">Select the JSON file you want broken into a chaptered folder archive. Parsing happens entirely in your browser.</p>
+
+        <input type="file" id="fileInput" accept=".json,application/json" hidden />
+        <div class="dropzone" id="dropzone">
+          <div class="dropzone-icon"></div>
+          <p><strong>Click to browse</strong> or drop a .json file here</p>
+          <p class="small">Large files are supported, but very large files (200MB+) may be slow depending on your browser.</p>
+        </div>
+
+        <div class="file-info" id="fileInfo"></div>
+        <div class="error-box" id="errorBox"></div>
+
+        <div class="btn-row">
+          <button class="btn wide" id="toStep2" disabled>Configure mapping →</button>
+        </div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div class="step-panel" id="panel-2">
+        <h2>02 — Configure</h2>
+        <p class="panel-sub">Tell Folio which field is the book title, which array holds the chapters, and which fields to pull into each chapter file.</p>
+
+        <div class="field">
+          <label class="flabel">Book title</label>
+          <input type="text" id="titleInput" placeholder="Book title" />
+          <div class="fhint" id="titleHint"></div>
+        </div>
+
+        <div class="field">
+          <label class="flabel">Chapters array</label>
+          <select id="chaptersSelect"></select>
+          <div class="manual-path">
+            <input type="text" id="manualPath" placeholder="or type a path manually, e.g. data.book.chapters" />
+            <button class="btn ghost" id="useManualPath">Use</button>
+          </div>
+          <div class="fhint" id="chaptersHint"></div>
+        </div>
+
+        <div id="fieldMapping" style="display:none;">
+          <div class="row2">
+            <div class="field">
+              <label class="flabel">Chapter title field</label>
+              <select id="titleFieldSelect"></select>
+            </div>
+            <div class="field">
+              <label class="flabel">Chapter number field</label>
+              <select id="numberFieldSelect"></select>
+            </div>
+          </div>
+          <div class="field">
+            <label class="flabel">Content fields (included in each chapter file)</label>
+            <div class="checks-box" id="contentFieldsBox"></div>
+          </div>
+        </div>
+
+        <div class="field" id="plainTextNote" style="display:none;">
+          <div class="fhint">Each item in this array is plain text — it will be used directly as the chapter content, numbered in order.</div>
+        </div>
+
+        <div class="field">
+          <label class="flabel">Options</label>
+          <div class="check-row">
+            <input type="checkbox" id="includeTxt" checked />
+            <label for="includeTxt">Include plain-text extract (chapter.txt)</label>
+          </div>
+          <div class="check-row">
+            <input type="checkbox" id="zeroPad" checked />
+            <label for="zeroPad">Zero-pad chapter numbers</label>
+          </div>
+          <div style="margin-top:10px;">
+            <label class="flabel">Split chapter.txt if larger than (characters, 0 = never)</label>
+            <input type="number" id="maxChars" value="0" min="0" step="1000" />
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn ghost" id="back1">← Back</button>
+          <button class="btn" id="toStep3" disabled>Review &amp; export →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3 -->
+      <div class="step-panel" id="panel-3">
+        <h2>03 — Export</h2>
+        <p class="panel-sub">Folio will build the folder archive and an index, then package it as a .zip you can unzip anywhere.</p>
+
+        <div class="summary-card" id="summaryCard"></div>
+
+        <button class="btn wide" id="buildBtn">Build archive</button>
+
+        <div class="result-box" id="resultBox">
+          <div class="rtitle">Archive ready</div>
+          <div class="rstats" id="resultStats"></div>
+          <button class="btn wide" id="downloadBtn">Download .zip</button>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn ghost" id="back2">← Back</button>
+          <button class="btn ghost" id="resetBtn">Start over</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: live tree preview -->
+    <div class="card tree-card">
+      <div class="tree-head">
+        <h2 id="treeTitle">Archive preview</h2>
+        <div class="tree-stats" id="treeStats">no file loaded</div>
+      </div>
+      <div class="tree-body" id="treeBody">
+        <div class="tree-empty">Upload a JSON file to see the folder structure Folio will build.</div>
+      </div>
+      <div class="progress-wrap" id="progressWrap" style="display:none;">
+        <div class="progress-label">
+          <span id="progressText">Working…</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="note">Runs entirely in your browser — your file is never uploaded anywhere.</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------
+  const state = {
+    file: null,
+    parsed: null,
+    fileBaseName: "book",
+    candidates: [],          // array candidates: {path, arr, isObjectItems, sampleKeys}
+    titleCandidates: [],     // {path, value}
+    chosenArr: null,
+    chosenArrPath: "",
+    isObjectItems: true,
+    titleField: "",
+    numberField: "__auto__",
+    contentFields: [],
+    options: { includeTxt: true, zeroPad: true, maxChars: 0 },
+    built: null              // {blob, fileName, totalChapters, totalWords, totalChars, totalFiles}
+  };
+
+  // ---------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------
+  function $(id){ return document.getElementById(id); }
+
+  function sanitizeName(str, maxLen){
+    maxLen = maxLen || 80;
+    let s = String(str == null ? "" : str).trim();
+    s = s.replace(/[\\\/:*?"<>|]+/g, "");
+    s = s.replace(/\s+/g, " ").trim();
+    s = s.replace(/^\.+|\.+$/g, "");
+    if (!s) s = "Untitled";
+    if (s.length > maxLen) s = s.slice(0, maxLen).trim();
+    return s;
+  }
+
+  function pad(n, width){
+    return String(n).padStart(width, "0");
+  }
+
+  function formatBytes(bytes){
+    if (bytes < 1024) return bytes + " B";
+    const units = ["KB","MB","GB"];
+    let i = -1;
+    do { bytes /= 1024; i++; } while (bytes >= 1024 && i < units.length - 1);
+    return bytes.toFixed(1) + " " + units[i];
+  }
+
+  function wordCount(text){
+    const t = String(text || "").trim();
+    return t ? t.split(/\s+/).length : 0;
+  }
+
+  function extractText(val){
+    if (val == null) return "";
+    if (typeof val === "string") return val;
+    if (typeof val === "number" || typeof val === "boolean") return String(val);
+    if (Array.isArray(val)) return val.map(extractText).join("\n\n");
+    if (typeof val === "object"){
+      if (typeof val.text === "string") return val.text;
+      if (typeof val.content === "string") return val.content;
+      if (typeof val.body === "string") return val.body;
+      try { return JSON.stringify(val, null, 2); } catch(e){ return String(val); }
+    }
+    return String(val);
+  }
+
+  function resolvePath(obj, path){
+    if (!path) return obj;
+    const parts = path.split(".");
+    let cur = obj;
+    for (const part of parts){
+      if (cur == null) return undefined;
+      const m = part.match(/^([^\[\]]+)((?:\[\d+\])*)$/);
+      if (!m) return undefined;
+      cur = cur[m[1]];
+      const idxMatches = m[2].match(/\[\d+\]/g);
+      if (idxMatches){
+        for (const im of idxMatches){
+          if (cur == null) return undefined;
+          cur = cur[Number(im.slice(1,-1))];
+        }
+      }
+    }
+    return cur;
+  }
+
+  function nextFrame(){
+    return new Promise(r => requestAnimationFrame(r));
+  }
+
+  function debounce(fn, ms){
+    let t;
+    return function(){
+      clearTimeout(t);
+      const args = arguments;
+      t = setTimeout(() => fn.apply(null, args), ms);
+    };
+  }
+
+  // ---------------------------------------------------------------
+  // Detection
+  // ---------------------------------------------------------------
+  function scanForArrayCandidates(node, path, depth, maxDepth, out, seen){
+    if (depth > maxDepth || node == null) return;
+    if (Array.isArray(node)){
+      if (node.length > 0){
+        const first = node[0];
+        const isObj = first !== null && typeof first === "object" && !Array.isArray(first);
+        const isPrimitive = typeof first === "string" || typeof first === "number";
+        if (isObj || isPrimitive){
+          const key = path || "(root)";
+          if (!seen.has(key)){
+            seen.add(key);
+            out.push({
+              path: key,
+              arr: node,
+              isObjectItems: isObj,
+              sampleKeys: isObj ? Object.keys(first).slice(0, 20) : []
+            });
+          }
+        }
+        if (isObj){
+          scanForArrayCandidates(first, (path ? path + "." : "") + "0", depth + 1, maxDepth, out, seen);
+        }
+      }
+    } else if (typeof node === "object"){
+      for (const key of Object.keys(node)){
+        scanForArrayCandidates(node[key], path ? path + "." + key : key, depth + 1, maxDepth, out, seen);
+      }
+    }
+  }
+
+  function scoreArrayCandidate(c){
+    let score = c.arr.length > 1 ? 2 : 0;
+    const joined = (c.path + " " + c.sampleKeys.join(" ")).toLowerCase();
+    if (/chapter/.test(joined)) score += 5;
+    if (/content|text|body|prose|scene/.test(joined)) score += 2;
+    if (/title|name|heading/.test(joined)) score += 2;
+    if (/number|order|index/.test(joined)) score += 1;
+    return score;
+  }
+
+  function scanForTitleCandidates(node, path, depth, maxDepth, out){
+    if (depth > maxDepth || node == null || typeof node !== "object" || Array.isArray(node)) return;
+    for (const key of Object.keys(node)){
+      const val = node[key];
+      if (typeof val === "string" && val.length > 0 && val.length < 200){
+        out.push({ path: path ? path + "." + key : key, key, value: val });
+      } else if (val && typeof val === "object" && !Array.isArray(val)){
+        scanForTitleCandidates(val, path ? path + "." + key : key, depth + 1, maxDepth, out);
+      }
+    }
+  }
+
+  function scoreTitleCandidate(c){
+    let score = 0;
+    if (/^title$/i.test(c.key)) score += 6;
+    if (/book.*title|title.*book/i.test(c.key)) score += 6;
+    if (/^name$/i.test(c.key)) score += 3;
+    if (/title|name/i.test(c.key)) score += 2;
+    score -= c.path.split(".").length; // prefer shallow
+    return score;
+  }
+
+  function runDetection(){
+    const arrOut = [];
+    scanForArrayCandidates(state.parsed, "", 0, 5, arrOut, new Set());
+    arrOut.sort((a,b) => scoreArrayCandidate(b) - scoreArrayCandidate(a));
+    state.candidates = arrOut;
+
+    const titleOut = [];
+    scanForTitleCandidates(state.parsed, "", 0, 2, titleOut);
+    titleOut.sort((a,b) => scoreTitleCandidate(b) - scoreTitleCandidate(a));
+    state.titleCandidates = titleOut;
+  }
+
+  // ---------------------------------------------------------------
+  // Step 1: file handling
+  // ---------------------------------------------------------------
+  const fileInput = $("fileInput");
+  const dropzone = $("dropzone");
+  const fileInfo = $("fileInfo");
+  const errorBox = $("errorBox");
+  const toStep2Btn = $("toStep2");
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("drag"); });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
+  dropzone.addEventListener("drop", e => {
+    e.preventDefault();
+    dropzone.classList.remove("drag");
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
+  });
+
+  function showError(msg){
+    errorBox.textContent = msg;
+    errorBox.classList.add("show");
+  }
+  function clearError(){
+    errorBox.textContent = "";
+    errorBox.classList.remove("show");
+  }
+
+  function handleFile(file){
+    clearError();
+    state.file = file;
+    state.fileBaseName = file.name.replace(/\.json$/i, "");
+    toStep2Btn.disabled = true;
+
+    fileInfo.classList.add("show");
+    fileInfo.innerHTML = 'Reading <span class="fname">' + escapeHtml(file.name) + "</span> (" + formatBytes(file.size) + ")…";
+
+    const reader = new FileReader();
+    reader.onerror = function(){
+      showError("Could not read the file. Please try again.");
+      fileInfo.classList.remove("show");
+    };
+    reader.onload = function(){
+      fileInfo.innerHTML = 'Parsing <span class="fname">' + escapeHtml(file.name) + "</span>…";
+      setTimeout(() => {
+        try {
+          state.parsed = JSON.parse(reader.result);
+        } catch (err){
+          fileInfo.classList.remove("show");
+          showError("This doesn't look like valid JSON: " + err.message);
+          return;
+        }
+        runDetection();
+        const arrInfo = state.candidates.length
+          ? state.candidates.length + " possible chapter array" + (state.candidates.length === 1 ? "" : "s") + " found"
+          : "no obvious chapter array found — you can enter a path manually";
+        fileInfo.innerHTML =
+          'Parsed <span class="fname">' + escapeHtml(file.name) + '</span> (' + formatBytes(file.size) + ') — <span class="ok">' + arrInfo + "</span>";
+        toStep2Btn.disabled = false;
+        prepareStep2();
+      }, 30);
+    };
+    reader.readAsText(file);
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  // ---------------------------------------------------------------
+  // Step 2: configure
+  // ---------------------------------------------------------------
+  const titleInput = $("titleInput");
+  const titleHint = $("titleHint");
+  const chaptersSelect = $("chaptersSelect");
+  const chaptersHint = $("chaptersHint");
+  const manualPath = $("manualPath");
+  const useManualPathBtn = $("useManualPath");
+  const fieldMapping = $("fieldMapping");
+  const titleFieldSelect = $("titleFieldSelect");
+  const numberFieldSelect = $("numberFieldSelect");
+  const contentFieldsBox = $("contentFieldsBox");
+  const plainTextNote = $("plainTextNote");
+  const includeTxt = $("includeTxt");
+  const zeroPad = $("zeroPad");
+  const maxChars = $("maxChars");
+  const toStep3Btn = $("toStep3");
+
+  function prepareStep2(){
+    // Title
+    if (state.titleCandidates.length){
+      const best = state.titleCandidates[0];
+      titleInput.value = best.value;
+      titleHint.textContent = "Detected from: " + best.path;
+    } else {
+      titleInput.value = state.fileBaseName;
+      titleHint.textContent = "No title field detected — using file name";
+    }
+
+    // Chapter array dropdown
+    chaptersSelect.innerHTML = "";
+    if (state.candidates.length === 0){
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "— none detected, use manual path below —";
+      chaptersSelect.appendChild(opt);
+    } else {
+      state.candidates.forEach((c, i) => {
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        const label = (c.path || "(root)") + "  ·  " + c.arr.length + " items" +
+          (c.isObjectItems ? "  ·  keys: " + c.sampleKeys.slice(0,5).join(", ") : "  ·  plain text items");
+        opt.textContent = label;
+        chaptersSelect.appendChild(opt);
+      });
+    }
+    chaptersSelect.onchange = () => {
+      const idx = chaptersSelect.value;
+      if (idx === "") return;
+      chooseChapterArray(state.candidates[Number(idx)]);
+    };
+    if (state.candidates.length) chooseChapterArray(state.candidates[0]);
+    else { fieldMapping.style.display = "none"; plainTextNote.style.display = "none"; }
+
+    updatePreview();
+  }
+
+  useManualPathBtn.addEventListener("click", () => {
+    const path = manualPath.value.trim();
+    if (!path && path !== ""){ return; }
+    const resolved = path === "" ? state.parsed : resolvePath(state.parsed, path);
+    if (!Array.isArray(resolved) || resolved.length === 0){
+      chaptersHint.textContent = "That path didn't resolve to a non-empty array.";
+      return;
+    }
+    const first = resolved[0];
+    const isObj = first !== null && typeof first === "object" && !Array.isArray(first);
+    const candidate = {
+      path: path || "(root)",
+      arr: resolved,
+      isObjectItems: isObj,
+      sampleKeys: isObj ? Object.keys(first).slice(0, 20) : []
+    };
+    chaptersSelect.value = "";
+    chooseChapterArray(candidate);
+    updatePreview();
+  });
+
+  function chooseChapterArray(candidate){
+    state.chosenArr = candidate.arr;
+    state.chosenArrPath = candidate.path;
+    state.isObjectItems = candidate.isObjectItems;
+    chaptersHint.textContent = candidate.arr.length + " items found at " + candidate.path;
+
+    if (!candidate.isObjectItems){
+      fieldMapping.style.display = "none";
+      plainTextNote.style.display = "block";
+      state.titleField = "";
+      state.numberField = "__auto__";
+      state.contentFields = [];
+      toStep3Btn.disabled = false;
+      return;
+    }
+    plainTextNote.style.display = "none";
+    fieldMapping.style.display = "block";
+
+    const keys = candidate.sampleKeys;
+
+    // Title field guess
+    let titleGuess = keys.find(k => /^title$/i.test(k)) || keys.find(k => /title|name|heading/i.test(k)) || keys.find(k => typeof candidate.arr[0][k] === "string") || keys[0];
+    titleFieldSelect.innerHTML = "";
+    keys.forEach(k => {
+      const opt = document.createElement("option");
+      opt.value = k; opt.textContent = k;
+      if (k === titleGuess) opt.selected = true;
+      titleFieldSelect.appendChild(opt);
+    });
+    state.titleField = titleGuess || "";
+
+    // Number field guess
+    numberFieldSelect.innerHTML = "";
+    const autoOpt = document.createElement("option");
+    autoOpt.value = "__auto__"; autoOpt.textContent = "(auto-number sequentially)";
+    numberFieldSelect.appendChild(autoOpt);
+    let numberGuess = keys.find(k => /^(chapter_?)?(number|num|no)$/i.test(k)) || keys.find(k => /order|index/i.test(k) && typeof candidate.arr[0][k] === "number");
+    keys.forEach(k => {
+      const opt = document.createElement("option");
+      opt.value = k; opt.textContent = k;
+      if (k === numberGuess) opt.selected = true;
+      numberFieldSelect.appendChild(opt);
+    });
+    state.numberField = numberGuess || "__auto__";
+
+    rebuildContentFieldsBox(keys);
+
+    titleFieldSelect.onchange = () => { state.titleField = titleFieldSelect.value; rebuildContentFieldsBox(keys); updatePreview(); };
+    numberFieldSelect.onchange = () => { state.numberField = numberFieldSelect.value; rebuildContentFieldsBox(keys); updatePreview(); };
+
+    toStep3Btn.disabled = false;
+  }
+
+  function rebuildContentFieldsBox(keys){
+    const exclude = new Set([state.titleField, state.numberField].filter(k => k && k !== "__auto__"));
+    const remaining = keys.filter(k => !exclude.has(k));
+    const prevChecked = new Set(state.contentFields);
+    contentFieldsBox.innerHTML = "";
+    let anyDefaultMatched = remaining.some(k => /content|text|body|prose|scene|paragraph/i.test(k));
+    state.contentFields = [];
+    remaining.forEach(k => {
+      const row = document.createElement("div");
+      row.className = "check-row";
+      const id = "cf_" + k.replace(/[^a-z0-9]/gi, "_");
+      const cb = document.createElement("input");
+      cb.type = "checkbox"; cb.id = id; cb.value = k;
+      let shouldCheck;
+      if (prevChecked.size){
+        shouldCheck = prevChecked.has(k);
+      } else if (anyDefaultMatched){
+        shouldCheck = /content|text|body|prose|scene|paragraph/i.test(k);
+      } else {
+        shouldCheck = !/^(id|uuid|slug|key)$/i.test(k);
+      }
+      cb.checked = shouldCheck;
+      if (shouldCheck) state.contentFields.push(k);
+      cb.addEventListener("change", () => {
+        state.contentFields = Array.from(contentFieldsBox.querySelectorAll("input[type=checkbox]:checked")).map(c => c.value);
+        updatePreview();
+      });
+      const label = document.createElement("label");
+      label.htmlFor = id; label.textContent = k;
+      row.appendChild(cb); row.appendChild(label);
+      contentFieldsBox.appendChild(row);
+    });
+  }
+
+  titleInput.addEventListener("input", updatePreview);
+  includeTxt.addEventListener("change", updatePreview);
+  zeroPad.addEventListener("change", updatePreview);
+  maxChars.addEventListener("input", debounce(updatePreview, 150));
+
+  $("back1").addEventListener("click", () => goStep(1));
+  toStep2Btn.addEventListener("click", () => goStep(2));
+  $("back2").addEventListener("click", () => goStep(2));
+  toStep3Btn.addEventListener("click", () => { goStep(3); renderSummary(); });
+  $("resetBtn").addEventListener("click", resetAll);
+
+  // ---------------------------------------------------------------
+  // Stepper navigation
+  // ---------------------------------------------------------------
+  function goStep(n){
+    [1,2,3].forEach(i => {
+      $("panel-" + i).classList.toggle("active", i === n);
+      const dot = $("dot-" + i);
+      const lbl = $("lbl-" + i);
+      dot.classList.toggle("active", i === n);
+      dot.classList.toggle("done", i < n);
+      lbl.classList.toggle("active", i === n);
+      dot.textContent = i < n ? "✓" : String(i);
+    });
+  }
+
+  function resetAll(){
+    state.file = null;
+    state.parsed = null;
+    state.candidates = [];
+    state.titleCandidates = [];
+    state.chosenArr = null;
+    state.built = null;
+    fileInput.value = "";
+    fileInfo.classList.remove("show");
+    clearError();
+    $("resultBox").classList.remove("show");
+    $("progressWrap").style.display = "none";
+    goStep(1);
+    renderTree();
+  }
+
+  // ---------------------------------------------------------------
+  // Live preview tree (right panel)
+  // ---------------------------------------------------------------
+  const treeBody = $("treeBody");
+  const treeTitle = $("treeTitle");
+  const treeStats = $("treeStats");
+
+  function getChapterMeta(item, index){
+    if (!state.isObjectItems){
+      const text = extractText(item);
+      return { num: index + 1, title: "Chapter " + (index + 1), text };
+    }
+    const num = state.numberField !== "__auto__" && item[state.numberField] != null
+      ? item[state.numberField] : index + 1;
+    const title = state.titleField && item[state.titleField] != null
+      ? String(item[state.titleField]) : "Chapter " + (index + 1);
+    const text = state.contentFields.map(f => extractText(item[f])).filter(Boolean).join("\n\n");
+    return { num, title, text };
+  }
+
+  function updatePreview(){
+    renderTree();
+  }
+
+  let buildRows = []; // populated during real build, used to mark .done
+
+  function renderTree(buildingState){
+    const arr = state.chosenArr;
+    const title = sanitizeName(titleInput.value || state.fileBaseName, 100) || "Untitled Book";
+    treeTitle.textContent = arr ? title : "Archive preview";
+
+    if (!state.parsed){
+      treeStats.textContent = "no file loaded";
+      treeBody.innerHTML = '<div class="tree-empty">Upload a JSON file to see the folder structure Folio will build.</div>';
+      return;
+    }
+    if (!arr){
+      treeStats.textContent = "no chapter array selected";
+      treeBody.innerHTML = '<div class="tree-empty">Select a chapters array to preview the archive.</div>';
+      return;
+    }
+
+    const total = arr.length;
+    treeStats.textContent = total + " chapter" + (total === 1 ? "" : "s");
+
+    const widthBase = zeroPad.checked ? Math.max(2, String(total).length) : 1;
+    const rows = [];
+    const previewCount = Math.min(total, 12);
+    for (let i = 0; i < previewCount; i++){
+      const meta = getChapterMeta(arr[i], i);
+      const numLabel = zeroPad.checked ? pad(i + 1, widthBase) : String(i + 1);
+      const folder = "Chapter " + numLabel + " - " + sanitizeName(meta.title);
+      rows.push({ folder, words: wordCount(meta.text), key: "ch" + i });
+    }
+
+    let html = '<div class="tree-line root">' + escapeHtml(title) + "/</div>";
+    html += folderRowHtml("00 - Index", "idx", "index", null);
+    rows.forEach(r => { html += folderRowHtml(r.folder, r.key, "chapter", r.words); });
+    if (total > previewCount){
+      html += '<div class="more-row">… and ' + (total - previewCount) + " more chapter folder" + (total - previewCount === 1 ? "" : "s") + "</div>";
+    }
+    treeBody.innerHTML = html;
+  }
+
+  function folderRowHtml(name, key, type, words){
+    const cls = type === "index" ? "folder-row index" : "folder-row";
+    const tag = type === "index" ? "•" : "▸";
+    const meta = words != null ? (words + " words") : "";
+    return '<div class="folder-row ' + cls.replace("folder-row","").trim() + '" data-key="' + key + '">' +
+      '<span class="tag">' + tag + "</span>" +
+      '<span class="name">' + escapeHtml(name) + "/</span>" +
+      '<span class="meta">' + meta + "</span>" +
+      '<span class="mark">·</span>' +
+      "</div>";
+  }
+
+  // ---------------------------------------------------------------
+  // Step 3: summary + build
+  // ---------------------------------------------------------------
+  const summaryCard = $("summaryCard");
+  const buildBtn = $("buildBtn");
+  const resultBox = $("resultBox");
+  const resultStats = $("resultStats");
+  const downloadBtn = $("downloadBtn");
+  const progressWrap = $("progressWrap");
+  const progressFill = $("progressFill");
+  const progressText = $("progressText");
+  const progressPct = $("progressPct");
+
+  function renderSummary(){
+    const title = sanitizeName(titleInput.value || state.fileBaseName, 100);
+    const total = state.chosenArr ? state.chosenArr.length : 0;
+    summaryCard.innerHTML =
+      "Book title&nbsp; <b>" + escapeHtml(title) + "</b><br/>" +
+      "Chapters&nbsp;&nbsp;&nbsp; <b>" + total + "</b><br/>" +
+      "Source array&nbsp; <b>" + escapeHtml(state.chosenArrPath || "(root)") + "</b><br/>" +
+      "Content fields&nbsp; <b>" + (state.isObjectItems ? (state.contentFields.join(", ") || "(none selected)") : "plain text items") + "</b>";
+  }
+
+  function setProgress(pct, label){
+    progressWrap.style.display = "block";
+    progressFill.style.width = Math.max(0, Math.min(100, pct)) + "%";
+    progressPct.textContent = Math.round(pct) + "%";
+    if (label) progressText.textContent = label;
+  }
+
+  function markRowDone(key){
+    const el = treeBody.querySelector('[data-key="' + key + '"]');
+    if (el) el.classList.add("done");
+  }
+  function setRowMark(key, text){
+    const el = treeBody.querySelector('[data-key="' + key + '"] .mark');
+    if (el) el.textContent = text;
+  }
+
+  buildBtn.addEventListener("click", buildArchive);
+  downloadBtn.addEventListener("click", () => {
+    if (!state.built) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(state.built.blob);
+    a.download = state.built.fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+
+  async function buildArchive(){
+    if (!state.chosenArr || !state.chosenArr.length){
+      showError("No chapters to build.");
+      return;
+    }
+    clearError();
+    buildBtn.disabled = true;
+    resultBox.classList.remove("show");
+
+    // Render a full tree (not just preview cap) so checkmarks have somewhere to land.
+    const total = state.chosenArr.length;
+    const bookTitle = sanitizeName(titleInput.value || state.fileBaseName, 100) || "Untitled Book";
+    const widthBase = zeroPad.checked ? Math.max(2, String(total).length) : 1;
+    const maxC = Math.max(0, parseInt(maxChars.value, 10) || 0);
+
+    // Build full row list for the tree (cap visible rows to keep DOM sane on huge books)
+    const visibleCap = Math.min(total, 400);
+    let rowsHtml = '<div class="tree-line root">' + escapeHtml(bookTitle) + "/</div>";
+    rowsHtml += folderRowHtml("00 - Index", "idx", "index", null);
+    for (let i = 0; i < visibleCap; i++){
+      rowsHtml += folderRowHtml("Chapter " + (zeroPad.checked ? pad(i+1, widthBase) : (i+1)) + " - …", "ch" + i, "chapter", null);
+    }
+    if (total > visibleCap){
+      rowsHtml += '<div class="more-row">… and ' + (total - visibleCap) + " more (hidden from live view, still archived)</div>";
+    }
+    treeBody.innerHTML = rowsHtml;
+    treeTitle.textContent = bookTitle;
+    treeStats.textContent = total + " chapters";
+
+    const zip = new JSZip();
+    const root = zip.folder(bookTitle);
+    const chapterStats = [];
+    let totalWords = 0, totalChars = 0, totalFiles = 0;
+
+    setProgress(0, "Chunking chapters…");
+
+    for (let i = 0; i < total; i++){
+      const item = state.chosenArr[i];
+      const meta = getChapterMeta(item, i);
+      const numLabel = zeroPad.checked ? pad(i + 1, widthBase) : String(i + 1);
+      const folderTitle = sanitizeName(meta.title);
+      const folderName = "Chapter " + numLabel + " - " + folderTitle;
+      const chFolder = root.folder(folderName);
+
+      const words = wordCount(meta.text);
+      const chars = meta.text.length;
+      totalWords += words; totalChars += chars;
+
+      const chapterJson = {
+        number: meta.num,
+        title: meta.title,
+        wordCount: words,
+        charCount: chars,
+        contentFields: state.isObjectItems ? state.contentFields : ["(plain text item)"],
+        raw: item
+      };
+      chFolder.file("chapter.json", JSON.stringify(chapterJson, null, 2));
+      totalFiles++;
+
+      if (includeTxt.checked){
+        if (maxC > 0 && meta.text.length > maxC){
+          const parts = Math.ceil(meta.text.length / maxC);
+          for (let p = 0; p < parts; p++){
+            const slice = meta.text.slice(p * maxC, (p + 1) * maxC);
+            chFolder.file("chapter.part" + (p + 1) + "of" + parts + ".txt", slice);
+            totalFiles++;
+          }
+        } else {
+          chFolder.file("chapter.txt", meta.text);
+          totalFiles++;
+        }
+      }
+
+      chapterStats.push({
+        number: meta.num, title: meta.title, folder: folderName,
+        wordCount: words, charCount: chars
+      });
+
+      if (i < visibleCap) markRowDone("ch" + i);
+
+      if (i % 20 === 0){
+        setProgress((i / total) * 70, "Chunking chapter " + (i+1) + " of " + total + "…");
+        await nextFrame();
+      }
+    }
+
+    setProgress(72, "Writing index…");
+    await nextFrame();
+
+    const generatedAt = new Date().toISOString();
+    const indexJson = {
+      bookTitle, generatedAt, totalChapters: total, totalWords, totalChars,
+      sourceFile: state.file ? state.file.name : "",
+      sourceArrayPath: state.chosenArrPath,
+      mapping: state.isObjectItems ? {
+        titleField: state.titleField, numberField: state.numberField, contentFields: state.contentFields
+      } : { mode: "plain-text-array" },
+      chapters: chapterStats
+    };
+    const idxFolder = root.folder("00 - Index");
+    idxFolder.file("index.json", JSON.stringify(indexJson, null, 2));
+    idxFolder.file("index.html", buildIndexHtml(indexJson));
+    totalFiles += 2;
+    markRowDone("idx");
+
+    setProgress(78, "Compressing archive…");
+    await nextFrame();
+
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } }, (meta) => {
+      setProgress(78 + meta.percent * 0.22, "Compressing archive… " + Math.round(meta.percent) + "%");
+    });
+
+    setProgress(100, "Done");
+
+    state.built = {
+      blob,
+      fileName: bookTitle + ".zip",
+      totalChapters: total, totalWords, totalChars, totalFiles
+    };
+
+    resultStats.innerHTML =
+      "File&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>" + escapeHtml(bookTitle) + ".zip</b> (" + formatBytes(blob.size) + ")<br/>" +
+      "Chapters&nbsp; <b>" + total + "</b><br/>" +
+      "Files&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>" + totalFiles + "</b><br/>" +
+      "Words&nbsp;&nbsp;&nbsp;&nbsp; <b>" + totalWords.toLocaleString() + "</b>";
+    resultBox.classList.add("show");
+    buildBtn.disabled = false;
+  }
+
+  function buildIndexHtml(data){
+    const rows = data.chapters.map(c =>
+      "<tr><td>" + c.number + "</td><td>" + escapeHtml(c.title) + "</td>" +
+      '<td><a href="../' + encodeURIComponent(c.folder) + '/chapter.json">' + escapeHtml(c.folder) + "</a></td>" +
+      "<td>" + c.wordCount.toLocaleString() + "</td></tr>"
+    ).join("\n");
+    return "<!DOCTYPE html><html><head><meta charset='utf-8'><title>" + escapeHtml(data.bookTitle) + " — Index</title>" +
+      "<style>" +
+      "body{font-family:Georgia,serif;background:#13161b;color:#ece6d6;max-width:840px;margin:40px auto;padding:0 20px;}" +
+      "h1{font-family:monospace;letter-spacing:.06em;color:#e0a857;font-size:20px;}" +
+      "p{color:#9aa3ad;font-family:monospace;font-size:13px;}" +
+      "table{width:100%;border-collapse:collapse;margin-top:20px;}" +
+      "th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #2b313b;font-family:monospace;font-size:13px;}" +
+      "th{color:#c98b3d;text-transform:uppercase;letter-spacing:.06em;font-size:11px;}" +
+      "a{color:#e0a857;text-decoration:none;} a:hover{text-decoration:underline;}" +
+      "</style></head><body>" +
+      "<h1>" + escapeHtml(data.bookTitle) + "</h1>" +
+      "<p>" + data.totalChapters + " chapters &middot; " + data.totalWords.toLocaleString() + " words &middot; generated " + escapeHtml(data.generatedAt) + "</p>" +
+      "<table><thead><tr><th>#</th><th>Title</th><th>Folder</th><th>Words</th></tr></thead><tbody>" +
+      rows + "</tbody></table></body></html>";
+  }
+
+})();
+</script>
+</body>
+</html>
