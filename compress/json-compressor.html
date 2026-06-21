@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JSON Compressor</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#11151d; --border:#222836; --text:#e6e9ef;
+    --muted:#8b94a7; --accent:#5b8cff; --good:#3ddc97; --warn:#ffb454;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:28px; max-width:640px; width:100%;
+  }
+  h1{margin:0 0 4px; font-size:22px;}
+  p.sub{margin:0 0 20px; color:var(--muted); font-size:14px;}
+  .drop{
+    border:2px dashed var(--border); border-radius:10px; padding:30px;
+    text-align:center; cursor:pointer; transition:.2s; margin-bottom:16px;
+  }
+  .drop:hover, .drop.drag{border-color:var(--accent); background:#0f1726;}
+  .drop input{display:none;}
+  .options{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;}
+  .opt{
+    background:#0d1119; border:1px solid var(--border); border-radius:8px;
+    padding:12px; font-size:13px;
+  }
+  .opt label{display:flex; align-items:center; gap:8px; cursor:pointer;}
+  .opt small{display:block; color:var(--muted); margin-top:4px; margin-left:24px;}
+  select, input[type=number]{
+    background:#0d1119; border:1px solid var(--border); color:var(--text);
+    border-radius:6px; padding:4px 8px; font-size:13px;
+  }
+  button{
+    width:100%; padding:14px; border:none; border-radius:8px; font-size:15px;
+    font-weight:600; cursor:pointer; background:var(--accent); color:#fff;
+    transition:.15s;
+  }
+  button:disabled{opacity:.4; cursor:not-allowed;}
+  button:hover:not(:disabled){opacity:.9;}
+  .progress-wrap{margin-top:16px; display:none;}
+  .progress-bar{
+    height:8px; background:#0d1119; border-radius:4px; overflow:hidden;
+    border:1px solid var(--border);
+  }
+  .progress-fill{height:100%; width:0%; background:var(--accent); transition:width .15s;}
+  .status{font-size:13px; color:var(--muted); margin-top:8px; min-height:18px;}
+  .results{display:none; margin-top:18px; border-top:1px solid var(--border); padding-top:18px;}
+  .stat-row{display:flex; justify-content:space-between; font-size:14px; padding:4px 0;}
+  .stat-row .v{font-weight:600;}
+  .stat-row .good{color:var(--good);}
+  .dl{
+    margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;
+  }
+  .dl a{
+    flex:1; text-align:center; padding:12px; border-radius:8px;
+    background:var(--good); color:#06281a; font-weight:700; text-decoration:none;
+    font-size:14px;
+  }
+  .dl a.secondary{background:#1b2333; color:var(--text); border:1px solid var(--border);}
+  .err{color:#ff6b6b; font-size:13px; margin-top:10px;}
+  .fname{font-size:13px; color:var(--accent); margin-top:8px; word-break:break-all;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>JSON Compressor</h1>
+  <p class="sub">Minify and compress large JSON files entirely in your browser. No upload — everything runs locally.</p>
+
+  <div class="drop" id="drop">
+    <div id="dropText">Drag &amp; drop your JSON file here, or click to browse</div>
+    <div class="fname" id="fname"></div>
+    <input type="file" id="fileInput" accept=".json,application/json,.txt">
+  </div>
+
+  <div class="options">
+    <div class="opt">
+      <label><input type="checkbox" id="minify" checked> Minify JSON</label>
+      <small>Remove all whitespace/indentation (safe, lossless)</small>
+    </div>
+    <div class="opt">
+      <label><input type="checkbox" id="dedupe" checked> Deduplicate keys/strings</label>
+      <small>Tokenize repeated string values into a shared table (best for arrays of similar objects)</small>
+    </div>
+    <div class="opt">
+      <label><input type="checkbox" id="gzip" checked> Gzip compress (.gz)</label>
+      <small>Final pass with native browser CompressionStream (gzip)</small>
+    </div>
+    <div class="opt">
+      <label>Precision for numbers:
+        <select id="precision">
+          <option value="-1">Keep as-is</option>
+          <option value="6">6 decimals</option>
+          <option value="4">4 decimals</option>
+          <option value="2">2 decimals</option>
+        </select>
+      </label>
+      <small>Rounds floating point numbers to reduce size (lossy)</small>
+    </div>
+  </div>
+
+  <button id="go" disabled>Compress File</button>
+
+  <div class="progress-wrap" id="progWrap">
+    <div class="progress-bar"><div class="progress-fill" id="progFill"></div></div>
+    <div class="status" id="status">Reading file...</div>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="results" id="results">
+    <div class="stat-row"><span>Original size</span><span class="v" id="origSize">-</span></div>
+    <div class="stat-row"><span>Minified size</span><span class="v" id="minSize">-</span></div>
+    <div class="stat-row"><span>Dedup/tokenized size</span><span class="v" id="dedupSize">-</span></div>
+    <div class="stat-row"><span>Final (gzip) size</span><span class="v good" id="finalSize">-</span></div>
+    <div class="stat-row"><span>Total reduction</span><span class="v good" id="reduction">-</span></div>
+    <div class="dl" id="dlLinks"></div>
+  </div>
+</div>
+
+<script>
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const fnameEl = document.getElementById('fname');
+const goBtn = document.getElementById('go');
+const progWrap = document.getElementById('progWrap');
+const progFill = document.getElementById('progFill');
+const statusEl = document.getElementById('status');
+const errEl = document.getElementById('err');
+const resultsEl = document.getElementById('results');
+const dlLinks = document.getElementById('dlLinks');
+
+let currentFile = null;
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('drag');
+  if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) setFile(fileInput.files[0]);
+});
+
+function setFile(f) {
+  currentFile = f;
+  fnameEl.textContent = `${f.name} (${formatBytes(f.size)})`;
+  goBtn.disabled = false;
+  errEl.textContent = '';
+  resultsEl.style.display = 'none';
+}
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024*1024) return (b/1024).toFixed(2) + ' KB';
+  if (b < 1024*1024*1024) return (b/(1024*1024)).toFixed(2) + ' MB';
+  return (b/(1024*1024*1024)).toFixed(2) + ' GB';
+}
+
+function setProgress(pct, msg) {
+  progFill.style.width = pct + '%';
+  if (msg) statusEl.textContent = msg;
+}
+
+// Round numbers recursively to a given precision
+function roundNumbers(obj, precision) {
+  if (precision < 0) return obj;
+  const factor = Math.pow(10, precision);
+  function walk(o) {
+    if (Array.isArray(o)) {
+      for (let i = 0; i < o.length; i++) o[i] = walk(o[i]);
+      return o;
+    } else if (o !== null && typeof o === 'object') {
+      for (const k in o) o[k] = walk(o[k]);
+      return o;
+    } else if (typeof o === 'number' && !Number.isInteger(o)) {
+      return Math.round(o * factor) / factor;
+    }
+    return o;
+  }
+  return walk(obj);
+}
+
+// Build a dictionary of repeated string values and replace them with short tokens.
+// Output format: { "__dict__": [strings...], "__data__": <tree with @0,@1,... refs> }
+function tokenizeStrings(obj) {
+  const counts = new Map();
+
+  function scan(o) {
+    if (Array.isArray(o)) {
+      for (const v of o) scan(v);
+    } else if (o !== null && typeof o === 'object') {
+      for (const k in o) scan(o[k]);
+    } else if (typeof o === 'string' && o.length >= 4) {
+      counts.set(o, (counts.get(o) || 0) + 1);
+    }
+  }
+  scan(obj);
+
+  // Only tokenize strings that appear 3+ times and provide net savings
+  const dict = [];
+  const map = new Map();
+  for (const [str, count] of counts.entries()) {
+    if (count < 3) continue;
+    const tokenLen = ('@' + dict.length).length;
+    const savingsPerUse = str.length - tokenLen;
+    const dictEntryCost = str.length + 3; // approx overhead in dict array
+    if (savingsPerUse * count > dictEntryCost) {
+      map.set(str, '@' + dict.length);
+      dict.push(str);
+    }
+  }
+
+  if (dict.length === 0) return null; // not worth it
+
+  function replace(o) {
+    if (Array.isArray(o)) {
+      return o.map(replace);
+    } else if (o !== null && typeof o === 'object') {
+      const out = {};
+      for (const k in o) out[k] = replace(o[k]);
+      return out;
+    } else if (typeof o === 'string' && map.has(o)) {
+      return map.get(o);
+    }
+    return o;
+  }
+
+  return { __dict__: dict, __data__: replace(obj) };
+}
+
+async function gzipBlob(blob) {
+  if (typeof CompressionStream === 'undefined') return null;
+  const cs = new CompressionStream('gzip');
+  const stream = blob.stream().pipeThrough(cs);
+  return await new Response(stream).blob();
+}
+
+function downloadLink(blob, filename, label, secondary=false) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.textContent = label;
+  if (secondary) a.classList.add('secondary');
+  dlLinks.appendChild(a);
+}
+
+goBtn.addEventListener('click', async () => {
+  if (!currentFile) return;
+  errEl.textContent = '';
+  resultsEl.style.display = 'none';
+  dlLinks.innerHTML = '';
+  progWrap.style.display = 'block';
+  goBtn.disabled = true;
+
+  try {
+    const doMinify = document.getElementById('minify').checked;
+    const doDedupe = document.getElementById('dedupe').checked;
+    const doGzip = document.getElementById('gzip').checked;
+    const precision = parseInt(document.getElementById('precision').value, 10);
+
+    document.getElementById('origSize').textContent = formatBytes(currentFile.size);
+
+    setProgress(5, 'Reading file...');
+    const text = await currentFile.text();
+
+    setProgress(20, 'Parsing JSON...');
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error('File is not valid JSON: ' + e.message);
+    }
+
+    if (precision >= 0) {
+      setProgress(35, 'Rounding numbers...');
+      data = roundNumbers(data, precision);
+    }
+
+    setProgress(50, 'Minifying...');
+    let minStr = doMinify ? JSON.stringify(data) : JSON.stringify(data, null, 0);
+    document.getElementById('minSize').textContent = formatBytes(minStr.length);
+
+    let dedupStr = minStr;
+    if (doDedupe) {
+      setProgress(65, 'Deduplicating repeated strings...');
+      const tokenized = tokenizeStrings(data);
+      if (tokenized) {
+        const candidate = JSON.stringify(tokenized);
+        if (candidate.length < minStr.length) {
+          dedupStr = candidate;
+        }
+      }
+    }
+    document.getElementById('dedupSize').textContent = formatBytes(dedupStr.length);
+
+    setProgress(80, 'Preparing output...');
+    const outBlob = new Blob([dedupStr], {type: 'application/json'});
+
+    let finalBlob = outBlob;
+    let finalName = currentFile.name.replace(/\.json$/i, '') + '.min.json';
+    let isGz = false;
+
+    if (doGzip) {
+      setProgress(90, 'Gzip compressing...');
+      const gz = await gzipBlob(outBlob);
+      if (gz) {
+        finalBlob = gz;
+        finalName += '.gz';
+        isGz = true;
+      } else {
+        statusEl.textContent = 'Gzip not supported in this browser — providing minified file only.';
+      }
+    }
+
+    setProgress(100, 'Done.');
+    document.getElementById('finalSize').textContent = formatBytes(finalBlob.size);
+    const reduction = 100 * (1 - finalBlob.size / currentFile.size);
+    document.getElementById('reduction').textContent = reduction.toFixed(1) + '%';
+
+    downloadLink(finalBlob, finalName, isGz ? 'Download .gz' : 'Download .json');
+    if (isGz) {
+      downloadLink(outBlob, currentFile.name.replace(/\.json$/i,'') + '.min.json', 'Download minified (no gzip)', true);
+    }
+
+    resultsEl.style.display = 'block';
+  } catch (e) {
+    errEl.textContent = 'Error: ' + e.message;
+  } finally {
+    goBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
