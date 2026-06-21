@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Presignal — PDF Compressor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;800&display=swap');
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#080c10;--surface:#0d1117;--surface2:#131920;
+    --border:#1e2d3d;--accent:#e94560;--accent2:#0f9fff;
+    --accent3:#00ff88;--text:#c9d1d9;--text-dim:#5a6a7a;
+    --text-bright:#f0f6fc;--mono:'JetBrains Mono',monospace;--display:'Syne',sans-serif;
+  }
+  body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh}
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:linear-gradient(rgba(15,159,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(15,159,255,0.03) 1px,transparent 1px);
+    background-size:40px 40px}
+  .wrap{position:relative;z-index:1;max-width:960px;margin:0 auto;padding:40px 24px}
+
+  header{margin-bottom:32px}
+  .logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .logo-mark{width:24px;height:24px;background:var(--accent);clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);animation:spin 8s linear infinite}
+  .logo-text{font-family:var(--display);font-size:17px;font-weight:800;color:var(--text-bright)}
+  .logo-text span{color:var(--accent)}
+  h1{font-family:var(--display);font-size:clamp(22px,4vw,36px);font-weight:800;color:var(--text-bright);letter-spacing:-1px}
+  h1 em{font-style:normal;color:var(--accent3)}
+  .subtitle{margin-top:5px;font-size:10px;color:var(--text-dim);letter-spacing:2px;text-transform:uppercase}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:4px;margin-bottom:10px;overflow:hidden}
+  .card-head{padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--accent2);display:flex;justify-content:space-between;align-items:center}
+  .card-body{padding:16px}
+
+  .drop-zone{border:1px dashed var(--border);border-radius:4px;padding:44px 24px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface);margin-bottom:10px;position:relative;overflow:hidden}
+  .drop-zone::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(15,159,255,0.05),transparent 70%);opacity:0;transition:opacity 0.3s}
+  .drop-zone:hover::after,.drop-zone.over::after{opacity:1}
+  .drop-zone:hover,.drop-zone.over{border-color:var(--accent2)}
+  .drop-zone.over{border-style:solid;border-color:var(--accent3)}
+  .drop-title{font-family:var(--display);font-size:16px;font-weight:700;color:var(--text-bright);margin-bottom:5px}
+  .drop-sub{font-size:10px;color:var(--text-dim)}
+  .drop-sub b{color:var(--accent2);cursor:pointer}
+  #fileInput{display:none}
+
+  .options-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px}
+  .field label{display:block;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:5px}
+  .field select,.field input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;padding:7px 10px;border-radius:2px;outline:none;transition:border-color 0.2s}
+  .field select:focus,.field input:focus{border-color:var(--accent2)}
+
+  .toggle-row{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px}
+  .toggle{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:10px;color:var(--text-dim);user-select:none}
+  .toggle input{display:none}
+  .toggle-track{width:28px;height:14px;background:var(--border);border-radius:8px;position:relative;transition:background 0.2s}
+  .toggle-track::after{content:'';position:absolute;top:2px;left:2px;width:10px;height:10px;background:var(--text-dim);border-radius:50%;transition:all 0.2s}
+  .toggle input:checked+.toggle-track{background:var(--accent2)}
+  .toggle input:checked+.toggle-track::after{left:16px;background:white}
+
+  .file-item{display:flex;align-items:center;gap:9px;padding:8px 12px;border:1px solid var(--border);border-radius:2px;background:var(--surface2);font-size:11px;margin-bottom:5px;animation:slideIn 0.2s ease both}
+  .file-item.done{border-color:rgba(0,255,136,0.3)}
+  .file-item.error{border-color:rgba(233,69,96,0.4)}
+  .file-item.processing{border-color:rgba(15,159,255,0.4)}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--text-dim);flex-shrink:0}
+  .file-item.processing .dot{background:var(--accent2);animation:pulse 0.8s infinite}
+  .file-item.done .dot{background:var(--accent3)}
+  .file-item.error .dot{background:var(--accent)}
+  .fname{flex:1;color:var(--text-bright);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fmeta{color:var(--text-dim);font-size:9px;white-space:nowrap}
+  .fremove{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:15px;padding:0 4px;transition:color 0.15s}
+  .fremove:hover{color:var(--accent)}
+
+  .stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px}
+  .stat{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:10px;text-align:center}
+  .stat-v{font-family:var(--display);font-size:18px;font-weight:800;color:var(--accent2);line-height:1}
+  .stat-v.g{color:var(--accent3)}
+  .stat-v.r{color:var(--accent)}
+  .stat-l{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-top:3px}
+
+  .progress-wrap{margin-bottom:10px}
+  .progress-label{font-size:10px;color:var(--text-dim);margin-bottom:4px;display:flex;justify-content:space-between}
+  .progress-track{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent3));border-radius:2px;transition:width 0.15s linear;width:0%}
+
+  .compile-btn{width:100%;padding:15px;background:var(--accent);color:white;border:none;font-family:var(--display);font-size:14px;font-weight:800;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border-radius:2px;transition:all 0.2s;margin-bottom:10px}
+  .compile-btn:hover:not(:disabled){background:#ff2d4f;transform:translateY(-1px)}
+  .compile-btn:disabled{background:var(--border);color:var(--text-dim);cursor:not-allowed;transform:none}
+
+  .output-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .output-title{font-family:var(--display);font-size:12px;font-weight:700;color:var(--text-bright);letter-spacing:1px;text-transform:uppercase}
+  .btn-row{display:flex;gap:8px}
+  .btn{background:none;font-family:var(--mono);font-size:10px;padding:5px 12px;cursor:pointer;border-radius:2px;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
+  .btn-green{border:1px solid var(--accent3);color:var(--accent3)}
+  .btn-green:hover{background:rgba(0,255,136,0.08)}
+  .btn-blue{border:1px solid var(--accent2);color:var(--accent2)}
+  .btn-blue:hover{background:rgba(15,159,255,0.08)}
+  .btn-dim{border:1px solid var(--border);color:var(--text)}
+  .btn-dim:hover{border-color:var(--accent2);color:var(--accent2)}
+
+  .result-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+  .rc{background:var(--surface2);border:1px solid rgba(0,255,136,0.2);border-radius:3px;padding:10px;text-align:center}
+  .rc-v{font-family:var(--display);font-size:20px;font-weight:800;color:var(--accent3)}
+  .rc-l{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-top:3px}
+
+  .preview{background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:14px;font-size:10px;line-height:1.7;max-height:380px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;scrollbar-width:thin;scrollbar-color:var(--border) transparent;margin-bottom:10px}
+  .log{background:var(--bg);border:1px solid var(--border);border-radius:2px;padding:8px 12px;font-size:9px;color:var(--text-dim);max-height:90px;overflow-y:auto;scrollbar-width:thin}
+  .ll{margin-bottom:1px}
+  .ll.ok{color:var(--accent3)}
+  .ll.err{color:var(--accent)}
+  .ll.info{color:var(--accent2)}
+  .ll.warn{color:#f39c12}
+
+  .hidden{display:none!important}
+  @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.2}}
+  @keyframes slideIn{from{opacity:0;transform:translateX(-5px)}to{opacity:1;transform:translateX(0)}}
+  ::-webkit-scrollbar{width:3px;height:3px}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="logo"><div class="logo-mark"></div><div class="logo-text"><span>Pre</span>signal</div></div>
+  <h1>PDF → <em>AI-Ready Text</em></h1>
+  <p class="subtitle">Maximum compression · Minimum noise · Bulk processing</p>
+</header>
+
+<!-- Drop -->
+<div class="drop-zone" id="drop">
+  <div class="drop-title">📄 Drop PDF files here</div>
+  <div class="drop-sub">or <b id="browse">click to browse</b> — load hundreds at once · images bypassed · text extracted and compressed</div>
+  <input type="file" id="fileInput" multiple accept=".pdf">
+</div>
+
+<!-- Options -->
+<div class="card">
+  <div class="card-head">⚙ Compression Options</div>
+  <div class="card-body">
+    <div class="options-grid">
+      <div class="field">
+        <label>Output Format</label>
+        <select id="outputFormat">
+          <option value="single">Single merged file (recommended)</option>
+          <option value="perfile">One output file per PDF</option>
+          <option value="json">JSON with metadata</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Compression Level</label>
+        <select id="compressionLevel">
+          <option value="ultra">Ultra — strip everything non-essential</option>
+          <option value="high" selected>High — keep structure, strip formatting</option>
+          <option value="medium">Medium — preserve headings and lists</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Max chars per PDF (0 = unlimited)</label>
+        <input type="number" id="maxChars" value="0" min="0">
+      </div>
+    </div>
+    <div class="toggle-row">
+      <label class="toggle"><input type="checkbox" id="stripHeaders" checked><span class="toggle-track"></span>Strip repeated headers/footers</label>
+      <label class="toggle"><input type="checkbox" id="stripUrls"><span class="toggle-track"></span>Strip URLs</label>
+      <label class="toggle"><input type="checkbox" id="stripNumbers"><span class="toggle-track"></span>Strip standalone numbers</label>
+      <label class="toggle"><input type="checkbox" id="dedup" checked><span class="toggle-track"></span>Deduplicate repeated lines</label>
+      <label class="toggle"><input type="checkbox" id="includeFilename" checked><span class="toggle-track"></span>Include filename markers</label>
+      <label class="toggle"><input type="checkbox" id="includeMeta" checked><span class="toggle-track"></span>Include page count / metadata</label>
+    </div>
+  </div>
+</div>
+
+<!-- File list -->
+<div id="fileList" class="hidden"></div>
+
+<!-- Stats -->
+<div id="statsRow" class="stats-row hidden">
+  <div class="stat"><div class="stat-v" id="sFiles">0</div><div class="stat-l">PDFs</div></div>
+  <div class="stat"><div class="stat-v" id="sPages">0</div><div class="stat-l">Pages</div></div>
+  <div class="stat"><div class="stat-v" id="sCharsIn">0</div><div class="stat-l">Raw Chars</div></div>
+  <div class="stat"><div class="stat-v g" id="sCharsOut">—</div><div class="stat-l">Compressed</div></div>
+  <div class="stat"><div class="stat-v g" id="sRatio">—</div><div class="stat-l">Reduction</div></div>
+</div>
+
+<!-- Compile -->
+<button class="compile-btn hidden" id="compileBtn">⚡ Extract + Compress All PDFs</button>
+
+<!-- Progress -->
+<div id="progressWrap" class="progress-wrap hidden">
+  <div class="progress-label"><span id="progressLabel">Processing...</span><span id="progressPct">0%</span></div>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+</div>
+
+<!-- Output -->
+<div id="outputSection" class="hidden">
+  <div class="result-cards" id="resultCards"></div>
+  <div class="output-head">
+    <div class="output-title">Compressed Output</div>
+    <div class="btn-row">
+      <button class="btn btn-dim" id="copyBtn">Copy</button>
+      <button class="btn btn-blue" id="dlTxtBtn">↓ Download .txt</button>
+      <button class="btn btn-green" id="dlJsonBtn">↓ Download .json</button>
+    </div>
+  </div>
+  <div class="preview" id="preview"></div>
+  <div class="log" id="logEl"></div>
+</div>
+
+</div>
+
+<!-- PDF.js from CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+// Init PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── State ───────────────────────────────────────────────────
+const S = { files: [], results: [], outputTxt: '', outputJson: '' };
+let totalPages = 0, totalCharsIn = 0;
+
+// ── DOM ─────────────────────────────────────────────────────
+const drop       = document.getElementById('drop');
+const fileInput  = document.getElementById('fileInput');
+const fileListEl = document.getElementById('fileList');
+const compileBtn = document.getElementById('compileBtn');
+const statsRow   = document.getElementById('statsRow');
+const outputSec  = document.getElementById('outputSection');
+const previewEl  = document.getElementById('preview');
+const logEl      = document.getElementById('logEl');
+
+// ── Drop / Browse ───────────────────────────────────────────
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); addFiles([...e.dataTransfer.files]); });
+drop.addEventListener('click', () => fileInput.click());
+document.getElementById('browse').addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
+fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
+
+function addFiles(files) {
+  const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+  if (!pdfs.length) { log('No PDF files found in selection.', 'warn'); return; }
+  pdfs.forEach(f => {
+    if (S.files.find(x => x.name === f.name)) { log(`Skipped duplicate: ${f.name}`, 'warn'); return; }
+    const entry = { file: f, name: f.name, size: f.size, pages: 0, chars: 0, text: '', error: null };
+    S.files.push(entry);
+    renderItem(entry);
+  });
+  updateUI();
+}
+
+function renderItem(entry) {
+  fileListEl.classList.remove('hidden');
+  statsRow.classList.remove('hidden');
+  const el = document.createElement('div');
+  el.className = 'file-item';
+  el.id = 'fi-' + eid(entry.name);
+  el.innerHTML = `<div class="dot"></div><div class="fname">${entry.name}</div><div class="fmeta">${fmtSize(entry.size)}</div><button class="fremove">×</button>`;
+  el.querySelector('.fremove').addEventListener('click', () => {
+    S.files = S.files.filter(f => f.name !== entry.name);
+    el.remove();
+    if (!S.files.length) { fileListEl.classList.add('hidden'); statsRow.classList.add('hidden'); }
+    updateUI();
+  });
+  fileListEl.appendChild(el);
+  updateUI();
+}
+
+// ── Compile ─────────────────────────────────────────────────
+compileBtn.addEventListener('click', compile);
+
+async function compile() {
+  if (!S.files.length) return;
+  compileBtn.disabled = true;
+  outputSec.classList.remove('hidden');
+  document.getElementById('progressWrap').classList.remove('hidden');
+  clearLog();
+  previewEl.textContent = '';
+  document.getElementById('resultCards').innerHTML = '';
+  S.results = [];
+  totalPages = 0;
+  totalCharsIn = 0;
+
+  log(`Starting extraction — ${S.files.length} PDF(s)`, 'info');
+
+  for (let i = 0; i < S.files.length; i++) {
+    const entry = S.files[i];
+    const el = document.getElementById('fi-' + eid(entry.name));
+    if (el) el.className = 'file-item processing';
+
+    setProgress(Math.round((i / S.files.length) * 90), `${entry.name}`);
+
+    try {
+      const result = await extractPDF(entry);
+      entry.pages = result.pages;
+      entry.chars = result.rawText.length;
+      entry.text = result.rawText;
+      totalPages += result.pages;
+      totalCharsIn += result.chars;
+
+      S.results.push({
+        filename: entry.name,
+        pages: result.pages,
+        raw_chars: result.chars,
+        text: result.rawText,
+        metadata: result.metadata
+      });
+
+      if (el) {
+        el.className = 'file-item done';
+        el.querySelector('.fmeta').textContent = `${result.pages}pp · ${fmtSize(entry.size)}`;
+      }
+      log(`✓ ${entry.name} — ${result.pages} pages, ${fmtK(result.rawText.length)} chars`, 'ok');
+    } catch(err) {
+      entry.error = err.message;
+      if (el) el.className = 'file-item error';
+      log(`✗ ${entry.name}: ${err.message}`, 'err');
+    }
+
+    document.getElementById('sFiles').textContent = S.files.filter(f=>!f.error).length;
+    document.getElementById('sPages').textContent = totalPages.toLocaleString();
+    document.getElementById('sCharsIn').textContent = fmtK(totalCharsIn);
+  }
+
+  setProgress(92, 'Compressing...');
+  await tick();
+
+  // Compress all results
+  const format = v('outputFormat');
+  const level = v('compressionLevel');
+
+  const compressedResults = S.results.map(r => ({
+    ...r,
+    compressed: compressText(r.text, r.filename, level)
+  }));
+
+  let totalCharsOut = 0;
+  let outputTxt = '';
+  let outputJson = {};
+
+  if (format === 'single') {
+    const parts = [];
+    const incFname = document.getElementById('includeFilename').checked;
+    const incMeta  = document.getElementById('includeMeta').checked;
+
+    parts.push(`PRESIGNAL PDF CORPUS — ${new Date().toISOString().slice(0,10)}`);
+    parts.push(`FILES: ${compressedResults.length} | PAGES: ${totalPages} | SOURCE_CHARS: ${totalCharsIn}`);
+    parts.push('='.repeat(60));
+
+    compressedResults.forEach(r => {
+      if (incFname) parts.push(`\n### ${r.filename}${incMeta ? ` [${r.pages}pp]` : ''}`);
+      parts.push(r.compressed);
+      parts.push('---');
+    });
+
+    outputTxt = parts.join('\n');
+    totalCharsOut = outputTxt.length;
+
+  } else if (format === 'perfile') {
+    // For per-file we still create a combined preview but flag separately
+    outputTxt = compressedResults.map(r => `### ${r.filename}\n${r.compressed}`).join('\n\n---\n\n');
+    totalCharsOut = outputTxt.length;
+
+  } else if (format === 'json') {
+    outputJson = {
+      generated: new Date().toISOString(),
+      source_files: compressedResults.length,
+      total_pages: totalPages,
+      compression_level: level,
+      documents: compressedResults.map(r => ({
+        filename: r.filename,
+        pages: r.pages,
+        metadata: r.metadata,
+        text: r.compressed
+      }))
+    };
+    outputTxt = JSON.stringify(outputJson, null, 1);
+    totalCharsOut = outputTxt.length;
+  }
+
+  S.outputTxt  = outputTxt;
+  S.outputJson = JSON.stringify(outputJson || { text: outputTxt });
+
+  setProgress(100, 'Done');
+  await tick();
+
+  const ratio = totalCharsIn > 0 ? Math.round((1 - totalCharsOut / totalCharsIn) * 100) : 0;
+
+  document.getElementById('sCharsOut').textContent = fmtK(totalCharsOut);
+  document.getElementById('sRatio').textContent = ratio + '%';
+
+  document.getElementById('resultCards').innerHTML = `
+    <div class="rc"><div class="rc-v">${S.results.length}</div><div class="rc-l">PDFs Processed</div></div>
+    <div class="rc"><div class="rc-v">${totalPages.toLocaleString()}</div><div class="rc-l">Total Pages</div></div>
+    <div class="rc"><div class="rc-v">${fmtK(totalCharsOut)}</div><div class="rc-l">Output Size</div></div>
+    <div class="rc" style="border-color:rgba(0,255,136,0.4)"><div class="rc-v">${ratio}%</div><div class="rc-l">Compression</div></div>
+  `;
+
+  const preview = outputTxt.length > 8000 ? outputTxt.slice(0, 8000) + '\n\n... [truncated — download for full output]' : outputTxt;
+  previewEl.textContent = preview;
+
+  log(`✓ Complete — ${fmtK(totalCharsIn)} → ${fmtK(totalCharsOut)} chars (${ratio}% reduction)`, 'ok');
+
+  // Per-file downloads if needed
+  if (format === 'perfile') {
+    log('Per-file mode: use Download buttons for combined output. Individual files button below.', 'info');
+  }
+
+  setTimeout(() => {
+    document.getElementById('progressWrap').classList.add('hidden');
+    compileBtn.disabled = false;
+  }, 600);
+}
+
+// ── PDF Extraction ──────────────────────────────────────────
+async function extractPDF(entry) {
+  const arrayBuffer = await entry.file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, disableFontFace: true, verbosity: 0 }).promise;
+
+  const numPages = pdf.numPages;
+  let meta = {};
+
+  try {
+    const m = await pdf.getMetadata();
+    if (m.info) {
+      meta = {
+        title: m.info.Title || '',
+        author: m.info.Author || '',
+        subject: m.info.Subject || '',
+        keywords: m.info.Keywords || '',
+        creator: m.info.Creator || '',
+        created: m.info.CreationDate || ''
+      };
+      // Strip empty
+      Object.keys(meta).forEach(k => { if (!meta[k]) delete meta[k]; });
+    }
+  } catch(e) {}
+
+  const pageTexts = [];
+  const maxChars = parseInt(v('maxChars')) || 0;
+  let totalChars = 0;
+
+  for (let p = 1; p <= numPages; p++) {
+    try {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false });
+
+      // Build text from items — group by Y position to reconstruct lines
+      const items = content.items.filter(item => item.str && item.str.trim());
+
+      if (!items.length) continue; // image-only page — skip
+
+      // Group items into lines by Y coordinate (within 2pt tolerance)
+      const lines = [];
+      let currentLine = [];
+      let lastY = null;
+
+      items.forEach(item => {
+        const y = Math.round(item.transform[5]);
+        if (lastY === null || Math.abs(y - lastY) > 2) {
+          if (currentLine.length) lines.push(currentLine.map(i => i.str).join(' '));
+          currentLine = [item];
+          lastY = y;
+        } else {
+          currentLine.push(item);
+        }
+      });
+      if (currentLine.length) lines.push(currentLine.map(i => i.str).join(' '));
+
+      const pageText = lines.join('\n').trim();
+      if (pageText) {
+        pageTexts.push(pageText);
+        totalChars += pageText.length;
+      }
+
+      if (maxChars > 0 && totalChars >= maxChars) {
+        log(`  ${entry.name}: char limit reached at page ${p}/${numPages}`, 'warn');
+        break;
+      }
+    } catch(e) {
+      // Page extraction failed (likely image-only) — skip silently
+    }
+  }
+
+  return {
+    pages: numPages,
+    chars: totalChars,
+    rawText: pageTexts.join('\n\n'),
+    metadata: meta
+  };
+}
+
+// ── Compression Engine ──────────────────────────────────────
+function compressText(text, filename, level) {
+  if (!text || !text.trim()) return '[NO_EXTRACTABLE_TEXT — IMAGE_PDF]';
+
+  let t = text;
+
+  // Always apply: normalize whitespace
+  t = t.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  t = t.replace(/[ \t]+/g, ' ');  // multiple spaces → single
+
+  // Remove null bytes and control chars (except newlines)
+  t = t.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+
+  // Strip repeated headers/footers (lines that appear 3+ times identically)
+  if (document.getElementById('stripHeaders').checked) {
+    const lineCounts = {};
+    t.split('\n').forEach(line => {
+      const l = line.trim();
+      if (l.length > 3 && l.length < 120) lineCounts[l] = (lineCounts[l] || 0) + 1;
+    });
+    const repeats = new Set(Object.keys(lineCounts).filter(l => lineCounts[l] >= 3));
+    if (repeats.size) {
+      t = t.split('\n').filter(line => !repeats.has(line.trim())).join('\n');
+    }
+  }
+
+  // Strip URLs
+  if (document.getElementById('stripUrls').checked) {
+    t = t.replace(/https?:\/\/[^\s)>"\]]+/g, '[URL]');
+    t = t.replace(/www\.[^\s)>"\]]+/g, '[URL]');
+  }
+
+  // Strip standalone numbers (page numbers, figure numbers etc)
+  if (document.getElementById('stripNumbers').checked) {
+    t = t.replace(/^\s*\d+\s*$/gm, '');
+  }
+
+  // Deduplicate consecutive identical lines
+  if (document.getElementById('dedup').checked) {
+    const lines = t.split('\n');
+    const deduped = [];
+    let prev = null;
+    lines.forEach(line => {
+      const l = line.trim();
+      if (l !== prev) { deduped.push(line); prev = l; }
+    });
+    t = deduped.join('\n');
+  }
+
+  // Level-specific compression
+  if (level === 'ultra' || level === 'high') {
+    // Collapse 3+ blank lines to 1
+    t = t.replace(/\n{3,}/g, '\n\n');
+
+    // Remove lines that are just punctuation/symbols
+    t = t.split('\n').filter(line => {
+      const l = line.trim();
+      if (!l) return true;
+      if (l.length < 2) return false;
+      const alphanumRatio = (l.match(/[a-zA-Z0-9]/g) || []).length / l.length;
+      return alphanumRatio > 0.3;
+    }).join('\n');
+  }
+
+  if (level === 'ultra') {
+    // Collapse all multiple blank lines to none
+    t = t.replace(/\n\n+/g, '\n');
+
+    // Truncate very long words (likely garbage encoding artifacts)
+    t = t.split(/\s+/).map(word => word.length > 50 ? word.slice(0, 50) + '~' : word).join(' ');
+
+    // Remove lines shorter than 4 chars (lone letters, artifacts)
+    t = t.split('\n').filter(line => line.trim().length === 0 || line.trim().length >= 4).join('\n');
+
+    // Final whitespace collapse
+    t = t.replace(/[ \t]+/g, ' ').trim();
+  }
+
+  if (level === 'high') {
+    // Reduce multiple blank lines
+    t = t.replace(/\n{2,}/g, '\n');
+    t = t.trim();
+  }
+
+  // Always: final cleanup
+  t = t.replace(/\n{4,}/g, '\n\n').trim();
+
+  return t;
+}
+
+// ── Downloads ───────────────────────────────────────────────
+document.getElementById('dlTxtBtn').addEventListener('click', () => {
+  if (!S.outputTxt) return;
+  dl(S.outputTxt, `presignal_corpus_${date()}.txt`, 'text/plain');
+  log('Downloaded .txt', 'ok');
+});
+
+document.getElementById('dlJsonBtn').addEventListener('click', () => {
+  // Build clean JSON if not already
+  const format = v('outputFormat');
+  let jsonStr;
+  if (format === 'json') {
+    jsonStr = S.outputTxt;
+  } else {
+    const obj = {
+      generated: new Date().toISOString(),
+      description: 'Presignal compressed PDF corpus. Each document contains extracted text compressed for AI ingestion. Image-only pages are marked [NO_EXTRACTABLE_TEXT].',
+      source_count: S.results.length,
+      total_pages: totalPages,
+      documents: S.results.map(r => ({
+        filename: r.filename,
+        pages: r.pages,
+        metadata: r.metadata,
+        text: compressText(r.text, r.filename, v('compressionLevel'))
+      }))
+    };
+    jsonStr = JSON.stringify(obj, null, 1);
+  }
+  dl(jsonStr, `presignal_corpus_${date()}.json`, 'application/json');
+  log('Downloaded .json', 'ok');
+});
+
+document.getElementById('copyBtn').addEventListener('click', () => {
+  if (!S.outputTxt) return;
+  navigator.clipboard.writeText(S.outputTxt).then(() => log('Copied to clipboard.', 'ok'));
+});
+
+// Per-file download button (appears after compile)
+async function downloadPerFile() {
+  for (const r of S.results) {
+    const compressed = compressText(r.text, r.filename, v('compressionLevel'));
+    const fname = r.filename.replace('.pdf', '') + '_compressed.txt';
+    dl(compressed, fname, 'text/plain');
+    await new Promise(res => setTimeout(res, 200)); // stagger downloads
+  }
+}
+
+// ── Helpers ─────────────────────────────────────────────────
+function dl(content, filename, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function updateUI() {
+  const count = S.files.length;
+  compileBtn.classList.toggle('hidden', count === 0);
+  compileBtn.textContent = count > 0 ? `⚡ Extract + Compress ${count} PDF${count !== 1 ? 's' : ''}` : '⚡ Extract + Compress';
+  document.getElementById('sFiles').textContent = count;
+}
+
+function setProgress(pct, msg) {
+  document.getElementById('progressFill').style.width = pct + '%';
+  if (msg) document.getElementById('progressLabel').textContent = msg;
+  document.getElementById('progressPct').textContent = pct + '%';
+}
+
+function log(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = 'll ' + type;
+  el.textContent = `[${new Date().toLocaleTimeString('en-CA', { hour12: false })}] ${msg}`;
+  logEl.appendChild(el);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function clearLog() { logEl.innerHTML = ''; }
+function v(id) { return (document.getElementById(id).value || '').trim(); }
+function eid(n) { return n.replace(/[^a-z0-9]/gi, '_'); }
+function fmtSize(b) { return b > 1048576 ? `${(b / 1048576).toFixed(1)}mb` : `${Math.round(b / 1024)}kb`; }
+function fmtK(n) { return n > 999999 ? `${(n / 1000000).toFixed(1)}M` : n > 999 ? `${Math.round(n / 1000)}K` : n; }
+function date() { return new Date().toISOString().slice(0, 10); }
+function tick() { return new Promise(r => setTimeout(r, 0)); }
+</script>
+</body>
+</html>

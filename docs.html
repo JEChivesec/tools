@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARCHIVE — Document Index Engine</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap');
+
+:root {
+  --bg: #f5f0e8;
+  --paper: #faf7f2;
+  --ink: #1a1208;
+  --ink-dim: #6b5d4a;
+  --ink-faint: #c4b89a;
+  --red: #c0392b;
+  --amber: #d4820a;
+  --green: #2d6a4f;
+  --blue: #1a4a7a;
+  --border: #d4c8b0;
+  --shadow: rgba(26,18,8,0.12);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Courier Prime', 'Courier New', monospace;
+  min-height: 100vh;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 27px,
+      rgba(180,160,120,0.15) 27px,
+      rgba(180,160,120,0.15) 28px
+    );
+}
+
+/* Grain overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0.4;
+}
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 40px 32px;
+}
+
+/* Header — typewriter style */
+header {
+  border-bottom: 3px double var(--ink);
+  padding-bottom: 20px;
+  margin-bottom: 36px;
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+}
+
+.brand-block {}
+
+.brand-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 52px;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.brand-sub {
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  margin-top: 4px;
+}
+
+.header-meta {
+  margin-left: auto;
+  text-align: right;
+  font-size: 11px;
+  color: var(--ink-dim);
+  line-height: 1.8;
+}
+
+.stamp {
+  display: inline-block;
+  border: 2px solid var(--red);
+  color: var(--red);
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 14px;
+  letter-spacing: 0.15em;
+  padding: 2px 8px;
+  transform: rotate(-2deg);
+  margin-top: 6px;
+}
+
+/* Two-column layout */
+.layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+/* Card / section */
+.card {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  box-shadow: 2px 2px 0 var(--shadow), 4px 4px 0 rgba(0,0,0,0.04);
+  position: relative;
+}
+
+.card-header {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 10px 16px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 16px;
+  letter-spacing: 0.15em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-num {
+  opacity: 0.4;
+  font-size: 12px;
+}
+
+.card-body { padding: 20px; }
+
+/* Drop zone — manila folder aesthetic */
+.drop-zone {
+  border: 2px dashed var(--border);
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 8px,
+    rgba(180,160,120,0.08) 8px,
+    rgba(180,160,120,0.08) 16px
+  );
+  padding: 32px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.drop-zone:hover, .drop-zone.over {
+  border-color: var(--amber);
+  background: rgba(212,130,10,0.04);
+}
+
+.drop-zone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.drop-icon { font-size: 28px; margin-bottom: 8px; opacity: 0.5; }
+.drop-text { font-size: 12px; color: var(--ink-dim); line-height: 1.8; }
+.drop-text strong { color: var(--ink); }
+
+/* File index table */
+.file-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin-top: 12px;
+}
+
+.file-table th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 2px solid var(--ink);
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.file-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.file-table tr:hover td { background: rgba(212,130,10,0.05); }
+
+.file-name-cell {
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+}
+
+.file-type {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  padding: 2px 5px;
+  border-radius: 2px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.type-odt { background: rgba(45,106,79,0.12); color: var(--green); border: 1px solid rgba(45,106,79,0.3); }
+.type-doc { background: rgba(26,74,122,0.12); color: var(--blue); border: 1px solid rgba(26,74,122,0.3); }
+.type-docx { background: rgba(26,74,122,0.15); color: var(--blue); border: 1px solid rgba(26,74,122,0.3); }
+
+.file-status {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.status-pending { color: var(--ink-dim); }
+.status-ok { color: var(--green); }
+.status-warn { color: var(--amber); }
+.status-err { color: var(--red); }
+.status-processing { color: var(--amber); animation: blink 0.8s ease-in-out infinite; }
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.remove-btn {
+  background: none;
+  border: none;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 13px;
+  opacity: 0.5;
+  padding: 0 4px;
+}
+.remove-btn:hover { opacity: 1; }
+
+/* Settings */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.setting-row:last-child { border-bottom: none; }
+
+.setting-label { color: var(--ink-dim); font-size: 11px; }
+
+.toggle {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.toggle-opt {
+  padding: 5px 12px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  color: var(--ink-dim);
+  border: none;
+  background: none;
+  font-family: 'Courier Prime', monospace;
+  transition: all 0.15s;
+}
+
+.toggle-opt.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* Progress */
+.progress-wrap { margin: 12px 0; display: none; }
+
+.progress-track {
+  height: 3px;
+  background: var(--border);
+  margin-bottom: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--amber);
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+.progress-label { font-size: 10px; color: var(--ink-dim); }
+
+/* Log */
+.log {
+  background: var(--ink);
+  color: #a8d5a2;
+  font-size: 10px;
+  line-height: 1.9;
+  padding: 12px;
+  max-height: 100px;
+  overflow-y: auto;
+  display: none;
+  margin-top: 10px;
+}
+
+.log-line { display: flex; gap: 8px; }
+.log-t { color: #5a6a5a; flex-shrink: 0; }
+.log-ok { color: #a8d5a2; }
+.log-warn { color: #f0c060; }
+.log-err { color: #e06060; }
+.log-info { color: #80c0d0; }
+
+/* Buttons */
+.btn {
+  font-family: 'Courier Prime', monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  padding: 10px 20px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+  text-transform: uppercase;
+}
+
+.btn-primary {
+  background: var(--ink);
+  color: var(--paper);
+  width: 100%;
+  display: block;
+  font-weight: 700;
+  margin-top: 14px;
+}
+
+.btn-primary:hover { background: #2d2010; }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-export {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--ink-dim);
+  font-size: 11px;
+  padding: 7px 14px;
+}
+
+.btn-export:hover { border-color: var(--ink); color: var(--ink); }
+
+/* Stats bar */
+.stats-bar {
+  display: flex;
+  gap: 20px;
+  padding: 10px 16px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.stat-item { display: flex; flex-direction: column; gap: 2px; }
+.stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 20px; line-height: 1; color: #f0d080; }
+.stat-lbl { color: rgba(255,255,255,0.4); font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; }
+
+/* Output area */
+.output-wrap {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  padding: 20px;
+  font-size: 11px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 500px;
+  overflow-y: auto;
+  color: var(--ink);
+  display: none;
+}
+
+.output-wrap .doc-separator {
+  color: var(--red);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+/* Individual file cards */
+.individual-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+
+.ind-card {
+  border: 1px solid var(--border);
+  background: var(--paper);
+}
+
+.ind-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  background: rgba(180,160,120,0.1);
+}
+
+.ind-card-header:hover { background: rgba(212,130,10,0.06); }
+.ind-card-name { font-weight: 700; font-size: 12px; flex: 1; }
+.ind-card-size { font-size: 10px; color: var(--ink-dim); }
+.ind-card-toggle { color: var(--ink-dim); font-size: 12px; }
+
+.ind-card-body {
+  padding: 12px;
+  font-size: 11px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  display: none;
+}
+
+.ind-card-body.open { display: block; }
+
+.ind-export-row {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 2;
+}
+
+.empty-state .icon { font-size: 36px; margin-bottom: 8px; opacity: 0.4; }
+
+/* Export row */
+.export-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-dim); }
+
+/* Animations */
+@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+.fade-in { animation: fadeIn 0.3s ease forwards; }
+
+@media (max-width: 800px) {
+  .layout { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="brand-block">
+      <div class="brand-title">ARCHIVE</div>
+      <div class="brand-sub">Document Index &amp; Extraction Engine · ODT · DOC · DOCX</div>
+    </div>
+    <div class="header-meta">
+      <div id="session-date"></div>
+      <div id="file-count-label">No files loaded</div>
+      <div class="stamp" id="mode-stamp">INDEXING</div>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- LEFT: Controls -->
+    <div style="display:flex;flex-direction:column;gap:20px">
+
+      <!-- Upload -->
+      <div class="card">
+        <div class="card-header"><span class="card-num">§01</span> FILE INTAKE</div>
+        <div class="card-body">
+          <div class="drop-zone" id="drop-zone">
+            <input type="file" id="file-input" multiple accept=".odt,.doc,.docx">
+            <div class="drop-icon">🗂</div>
+            <div class="drop-text">
+              <strong>Drop files here</strong><br>
+              ODT · DOC · DOCX supported<br>
+              <span style="font-size:10px;opacity:0.6">Corrupted files attempted via fallback parser</span>
+            </div>
+          </div>
+
+          <!-- File index table -->
+          <div id="file-index-wrap" style="display:none;margin-top:14px">
+            <table class="file-table">
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>Type</th>
+                  <th>Size</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="file-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div class="card">
+        <div class="card-header"><span class="card-num">§02</span> OUTPUT MODE</div>
+        <div class="card-body">
+          <div class="setting-row">
+            <span class="setting-label">Output structure</span>
+            <div class="toggle">
+              <button class="toggle-opt active" id="mode-merged" onclick="setMode('merged')">Merged</button>
+              <button class="toggle-opt" id="mode-individual" onclick="setMode('individual')">Individual</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Include metadata</span>
+            <div class="toggle">
+              <button class="toggle-opt active" id="meta-yes" onclick="setMeta(true)">Yes</button>
+              <button class="toggle-opt" id="meta-no" onclick="setMeta(false)">No</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">Sort order</span>
+            <div class="toggle">
+              <button class="toggle-opt active" id="sort-name" onclick="setSort('name')">Name</button>
+              <button class="toggle-opt" id="sort-type" onclick="setSort('type')">Type</button>
+              <button class="toggle-opt" id="sort-size" onclick="setSort('size')">Size</button>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="run-btn" onclick="runExtraction()" disabled>
+            ▶ Extract &amp; Index
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="card" id="stats-card" style="display:none">
+        <div class="stats-bar">
+          <div class="stat-item"><div class="stat-val" id="stat-files">0</div><div class="stat-lbl">Files</div></div>
+          <div class="stat-item"><div class="stat-val" id="stat-chars">0</div><div class="stat-lbl">K chars</div></div>
+          <div class="stat-item"><div class="stat-val" id="stat-words">0</div><div class="stat-lbl">K words</div></div>
+          <div class="stat-item"><div class="stat-val" id="stat-ok">0</div><div class="stat-lbl">Recovered</div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Output -->
+    <div class="card" style="min-height:500px">
+      <div class="card-header"><span class="card-num">§03</span> EXTRACTED CONTENT</div>
+
+      <!-- Progress -->
+      <div style="padding:16px 20px 0" id="progress-wrap" style="display:none">
+        <div class="progress-wrap" id="prog-outer">
+          <div class="progress-track"><div class="progress-fill" id="prog-fill"></div></div>
+          <div class="progress-label" id="prog-label">Ready</div>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+
+      <!-- Empty -->
+      <div class="card-body" id="empty-state">
+        <div class="empty-state">
+          <div class="icon">📄</div>
+          Load ODT, DOC, or DOCX files on the left<br>
+          then click Extract &amp; Index<br>
+          <span style="font-size:10px;opacity:0.6">Corrupted files are parsed via ZIP/XML fallback</span>
+        </div>
+      </div>
+
+      <!-- Merged output -->
+      <div style="padding:16px 20px;display:none" id="merged-output-wrap">
+        <div class="export-row">
+          <button class="btn btn-export" onclick="copyMerged()">Copy All</button>
+          <button class="btn btn-export" onclick="downloadMergedTxt()">Download .txt</button>
+          <button class="btn btn-export" onclick="downloadMergedMd()">Download .md</button>
+        </div>
+        <div class="output-wrap" id="merged-output" style="display:block;margin-top:12px"></div>
+      </div>
+
+      <!-- Individual output -->
+      <div style="padding:16px 20px;display:none" id="individual-output-wrap">
+        <div class="export-row">
+          <button class="btn btn-export" onclick="downloadAllIndividual()">Download All as ZIP</button>
+        </div>
+        <div class="individual-list" id="individual-list"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// ============================================================
+// ARCHIVE — Document Index Engine
+// Supports: ODT (ZIP/XML), DOCX (ZIP/XML), DOC (binary partial)
+// Modes: Merged corpus / Individual cards
+// Fallback: Raw ZIP extraction for corrupted files
+// ============================================================
+
+const STATE = {
+  files: [],
+  mode: 'merged',
+  includeMeta: true,
+  sort: 'name',
+  results: [],
+};
+
+// Init
+document.getElementById('session-date').textContent = new Date().toLocaleDateString('en-CA', {
+  year:'numeric', month:'long', day:'numeric'
+});
+
+// ── FILE INGESTION ──────────────────────────────────────────
+
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('over');
+  addFiles([...e.dataTransfer.files]);
+});
+fileInput.addEventListener('change', () => addFiles([...fileInput.files]));
+
+function addFiles(newFiles) {
+  const valid = newFiles.filter(f =>
+    f.name.match(/\.(odt|doc|docx)$/i)
+  );
+  if (!valid.length) { log('No supported files found (ODT/DOC/DOCX).', 'warn'); return; }
+  valid.forEach(f => {
+    if (!STATE.files.find(x => x.name === f.name && x.size === f.size)) {
+      STATE.files.push({ file: f, name: f.name, size: f.size, type: ext(f.name), status: 'pending' });
+    }
+  });
+  renderFileTable();
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('file-count-label').textContent = `${STATE.files.length} file(s) loaded`;
+  log(`${valid.length} file(s) added. Total: ${STATE.files.length}`, 'ok');
+}
+
+function ext(name) { return name.split('.').pop().toLowerCase(); }
+
+function renderFileTable() {
+  const tbody = document.getElementById('file-table-body');
+  const wrap = document.getElementById('file-index-wrap');
+  wrap.style.display = STATE.files.length ? 'block' : 'none';
+
+  const sorted = sortedFiles();
+  tbody.innerHTML = sorted.map((f, i) => `
+    <tr>
+      <td class="file-name-cell" title="${f.name}">${f.name}</td>
+      <td><span class="file-type type-${f.type}">${f.type}</span></td>
+      <td>${(f.size/1024).toFixed(1)}k</td>
+      <td class="file-status status-${f.status}">${statusLabel(f.status)}</td>
+      <td><button class="remove-btn" onclick="removeFile('${f.name}')">✕</button></td>
+    </tr>`).join('');
+}
+
+function statusLabel(s) {
+  return { pending:'—', processing:'...', ok:'✓ OK', warn:'⚠ partial', err:'✗ fail' }[s] || s;
+}
+
+function sortedFiles() {
+  return [...STATE.files].sort((a, b) => {
+    if (STATE.sort === 'name') return a.name.localeCompare(b.name);
+    if (STATE.sort === 'type') return a.type.localeCompare(b.type);
+    if (STATE.sort === 'size') return b.size - a.size;
+    return 0;
+  });
+}
+
+function removeFile(name) {
+  STATE.files = STATE.files.filter(f => f.name !== name);
+  renderFileTable();
+  document.getElementById('run-btn').disabled = !STATE.files.length;
+  document.getElementById('file-count-label').textContent =
+    STATE.files.length ? `${STATE.files.length} file(s) loaded` : 'No files loaded';
+}
+
+// ── SETTINGS ────────────────────────────────────────────────
+
+function setMode(m) {
+  STATE.mode = m;
+  ['merged','individual'].forEach(x => {
+    document.getElementById(`mode-${x}`).classList.toggle('active', x === m);
+  });
+  document.getElementById('mode-stamp').textContent = m === 'merged' ? 'MERGED' : 'INDIVIDUAL';
+}
+
+function setMeta(v) {
+  STATE.includeMeta = v;
+  document.getElementById('meta-yes').classList.toggle('active', v);
+  document.getElementById('meta-no').classList.toggle('active', !v);
+}
+
+function setSort(s) {
+  STATE.sort = s;
+  ['name','type','size'].forEach(x => {
+    document.getElementById(`sort-${x}`).classList.toggle('active', x === s);
+  });
+  renderFileTable();
+}
+
+// ── EXTRACTION ENGINE ────────────────────────────────────────
+
+async function runExtraction() {
+  if (!STATE.files.length) return;
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('merged-output-wrap').style.display = 'none';
+  document.getElementById('individual-output-wrap').style.display = 'none';
+
+  const progOuter = document.getElementById('prog-outer');
+  progOuter.style.display = 'block';
+  document.getElementById('log').style.display = 'block';
+  document.getElementById('progress-wrap').style.display = 'block';
+
+  STATE.results = [];
+  let totalChars = 0, totalWords = 0, recovered = 0;
+
+  const files = sortedFiles();
+
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    setProgress((i / files.length) * 100, `Processing: ${f.name}...`);
+    updateFileStatus(f.name, 'processing');
+
+    try {
+      const text = await extractFile(f.file, f.type);
+      const meta = buildMeta(f, text);
+      f.status = text.trim() ? 'ok' : 'warn';
+      STATE.results.push({ name: f.name, type: f.type, size: f.size, text, meta, status: f.status });
+      totalChars += text.length;
+      totalWords += text.split(/\s+/).filter(Boolean).length;
+      if (f.status === 'ok') recovered++;
+      log(`${f.name}: ${text.length.toLocaleString()} chars extracted.`, 'ok');
+    } catch (err) {
+      f.status = 'err';
+      STATE.results.push({ name: f.name, type: f.type, size: f.size, text: '', meta: '', status: 'err' });
+      log(`${f.name}: extraction failed — ${err.message}`, 'err');
+    }
+
+    updateFileStatus(f.name, f.status);
+    renderFileTable();
+  }
+
+  setProgress(100, 'Extraction complete.');
+
+  // Stats
+  document.getElementById('stats-card').style.display = 'block';
+  document.getElementById('stat-files').textContent = files.length;
+  document.getElementById('stat-chars').textContent = Math.round(totalChars / 1000);
+  document.getElementById('stat-words').textContent = Math.round(totalWords / 1000);
+  document.getElementById('stat-ok').textContent = recovered;
+
+  // Render output
+  if (STATE.mode === 'merged') renderMerged();
+  else renderIndividual();
+
+  document.getElementById('run-btn').disabled = false;
+  log(`Done. ${recovered}/${files.length} files successfully extracted.`, 'ok');
+}
+
+function updateFileStatus(name, status) {
+  const f = STATE.files.find(x => x.name === name);
+  if (f) f.status = status;
+}
+
+// ── PARSERS ──────────────────────────────────────────────────
+
+async function extractFile(file, type) {
+  if (type === 'odt') return extractODT(file);
+  if (type === 'docx') return extractDOCX(file);
+  if (type === 'doc') return extractDOC(file);
+  throw new Error('Unsupported type');
+}
+
+// ODT: ZIP containing content.xml
+async function extractODT(file) {
+  try {
+    const zip = await JSZip.loadAsync(file, { checkCRC32: false }); // checkCRC32:false = tolerates corruption
+    const contentFile = zip.file('content.xml');
+    if (!contentFile) throw new Error('content.xml not found in ODT');
+    const xml = await contentFile.async('string');
+    return parseODTxml(xml);
+  } catch (err) {
+    // Fallback: try raw text scan of ArrayBuffer
+    log(`ODT ZIP parse failed, trying raw text fallback...`, 'warn');
+    return extractRawText(file);
+  }
+}
+
+function parseODTxml(xml) {
+  // Remove XML tags, decode entities, clean whitespace
+  let text = xml
+    .replace(/<text:line-break[^>]*\/>/gi, '\n')
+    .replace(/<text:p[^>]*>/gi, '\n')
+    .replace(/<text:h[^>]*>/gi, '\n\n')
+    .replace(/<text:list-item[^>]*>/gi, '\n  • ')
+    .replace(/<text:tab[^>]*\/>/gi, '\t')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return text;
+}
+
+// DOCX: ZIP containing word/document.xml
+async function extractDOCX(file) {
+  try {
+    const zip = await JSZip.loadAsync(file, { checkCRC32: false });
+    const docFile = zip.file('word/document.xml');
+    if (!docFile) throw new Error('word/document.xml not found');
+    const xml = await docFile.async('string');
+    return parseDOCXxml(xml);
+  } catch (err) {
+    log(`DOCX ZIP parse failed, trying raw text fallback...`, 'warn');
+    return extractRawText(file);
+  }
+}
+
+function parseDOCXxml(xml) {
+  let text = xml
+    .replace(/<w:br[^>]*\/>/gi, '\n')
+    .replace(/<\/w:p>/gi, '\n')
+    .replace(/<\/w:tr>/gi, '\n')
+    .replace(/<w:tab[^>]*\/>/gi, '\t')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return text;
+}
+
+// DOC: Legacy binary format — extract printable ASCII runs
+async function extractDOC(file) {
+  log(`DOC binary format detected — using printable text extraction...`, 'warn');
+  return extractRawText(file);
+}
+
+// Raw text fallback: scan for printable ASCII/Unicode runs
+async function extractRawText(file) {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let text = '';
+  let run = '';
+
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    // Accept printable ASCII, tab, newline, carriage return
+    if ((b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13) {
+      run += String.fromCharCode(b);
+    } else {
+      if (run.length >= 4) text += run + ' ';
+      run = '';
+    }
+  }
+  if (run.length >= 4) text += run;
+
+  // Clean up noise from binary headers
+  text = text
+    .replace(/[^\x20-\x7E\t\n\r]/g, '')
+    .replace(/\s{4,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  // Filter lines that look like content (not binary noise)
+  const lines = text.split('\n').filter(l => {
+    const words = l.trim().split(/\s+/).filter(w => /[a-zA-Z]{2,}/.test(w));
+    return words.length >= 2;
+  });
+
+  return lines.join('\n');
+}
+
+function buildMeta(f, text) {
+  if (!STATE.includeMeta) return '';
+  const words = text.split(/\s+/).filter(Boolean).length;
+  return [
+    `FILE: ${f.name}`,
+    `TYPE: ${f.type.toUpperCase()}`,
+    `SIZE: ${(f.size / 1024).toFixed(1)} KB`,
+    `CHARS: ${text.length.toLocaleString()}`,
+    `WORDS: ~${words.toLocaleString()}`,
+    `EXTRACTED: ${new Date().toISOString()}`,
+  ].join(' | ');
+}
+
+// ── OUTPUT RENDERERS ─────────────────────────────────────────
+
+function renderMerged() {
+  const wrap = document.getElementById('merged-output-wrap');
+  const output = document.getElementById('merged-output');
+  wrap.style.display = 'block';
+
+  const divider = '\n\n' + '═'.repeat(60) + '\n';
+
+  let corpus = STATE.results.map(r => {
+    const header = STATE.includeMeta
+      ? `${divider}[ ${r.name} | ${r.type.toUpperCase()} | ${(r.size/1024).toFixed(1)}KB ]\n${'─'.repeat(40)}\n`
+      : `${divider}[ ${r.name} ]\n`;
+    return header + (r.text || '[NO CONTENT EXTRACTED]');
+  }).join('');
+
+  output.textContent = corpus.trim();
+}
+
+function renderIndividual() {
+  const wrap = document.getElementById('individual-output-wrap');
+  const list = document.getElementById('individual-list');
+  wrap.style.display = 'block';
+  list.innerHTML = '';
+
+  STATE.results.forEach((r, i) => {
+    const card = document.createElement('div');
+    card.className = 'ind-card fade-in';
+    card.style.animationDelay = (i * 0.05) + 's';
+
+    const words = r.text.split(/\s+/).filter(Boolean).length;
+    const typeClass = `type-${r.type}`;
+
+    card.innerHTML = `
+      <div class="ind-card-header" onclick="toggleCard(${i})">
+        <span class="file-type ${typeClass}">${r.type}</span>
+        <span class="ind-card-name">${r.name}</span>
+        <span class="ind-card-size">${(r.size/1024).toFixed(1)}k · ~${words.toLocaleString()} words</span>
+        <span class="ind-card-toggle" id="toggle-icon-${i}">▶</span>
+      </div>
+      <div class="ind-card-body" id="card-body-${i}">
+${r.text || '[No content could be extracted from this file]'}
+      </div>
+      <div class="ind-export-row">
+        <button class="btn btn-export" onclick="copyIndividual(${i})">Copy</button>
+        <button class="btn btn-export" onclick="downloadIndividual(${i}, 'txt')">TXT</button>
+        <button class="btn btn-export" onclick="downloadIndividual(${i}, 'md')">MD</button>
+      </div>`;
+
+    list.appendChild(card);
+  });
+}
+
+function toggleCard(i) {
+  const body = document.getElementById(`card-body-${i}`);
+  const icon = document.getElementById(`toggle-icon-${i}`);
+  const open = body.classList.toggle('open');
+  icon.textContent = open ? '▼' : '▶';
+}
+
+// ── EXPORT FUNCTIONS ─────────────────────────────────────────
+
+function getMergedText() {
+  const divider = '\n\n' + '═'.repeat(60) + '\n';
+  return STATE.results.map(r => {
+    const header = STATE.includeMeta
+      ? `${divider}[ ${r.name} | ${r.type.toUpperCase()} | ${(r.size/1024).toFixed(1)}KB ]\n${'─'.repeat(40)}\n`
+      : `${divider}[ ${r.name} ]\n`;
+    return header + (r.text || '[NO CONTENT EXTRACTED]');
+  }).join('').trim();
+}
+
+function copyMerged() {
+  navigator.clipboard.writeText(getMergedText()).then(() => log('Merged corpus copied.', 'ok'));
+}
+
+function downloadMergedTxt() {
+  download(getMergedText(), `archive-merged-${Date.now()}.txt`, 'text/plain');
+  log('Downloaded merged corpus as .txt', 'ok');
+}
+
+function downloadMergedMd() {
+  const md = `# Archive — Merged Document Corpus\n_${new Date().toISOString()}_\n_Files: ${STATE.results.length}_\n\n---\n\n` +
+    STATE.results.map(r => `## ${r.name}\n\`${r.type.toUpperCase()} · ${(r.size/1024).toFixed(1)}KB\`\n\n${r.text || '[No content]'}`).join('\n\n---\n\n');
+  download(md, `archive-merged-${Date.now()}.md`, 'text/markdown');
+  log('Downloaded merged corpus as .md', 'ok');
+}
+
+function copyIndividual(i) {
+  navigator.clipboard.writeText(STATE.results[i].text).then(() => log(`Copied: ${STATE.results[i].name}`, 'ok'));
+}
+
+function downloadIndividual(i, fmt) {
+  const r = STATE.results[i];
+  const base = r.name.replace(/\.[^.]+$/, '');
+  if (fmt === 'txt') {
+    download((STATE.includeMeta ? r.meta + '\n\n' : '') + r.text, `${base}.txt`, 'text/plain');
+  } else {
+    const md = `# ${r.name}\n\`${r.type.toUpperCase()} · ${(r.size/1024).toFixed(1)}KB\`\n\n${r.text}`;
+    download(md, `${base}.md`, 'text/markdown');
+  }
+  log(`Downloaded: ${r.name} as .${fmt}`, 'ok');
+}
+
+async function downloadAllIndividual() {
+  const zip = new JSZip();
+  STATE.results.forEach(r => {
+    const base = r.name.replace(/\.[^.]+$/, '');
+    zip.file(`${base}.txt`, (STATE.includeMeta ? r.meta + '\n\n' : '') + r.text);
+  });
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `archive-individual-${Date.now()}.zip`; a.click();
+  URL.revokeObjectURL(url);
+  log('Downloaded all individual files as ZIP.', 'ok');
+}
+
+function download(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── UI HELPERS ───────────────────────────────────────────────
+
+function setProgress(pct, text) {
+  document.getElementById('prog-fill').style.width = pct + '%';
+  document.getElementById('prog-label').textContent = text;
+  document.getElementById('prog-outer').style.display = 'block';
+}
+
+function log(msg, type = 'info') {
+  const logEl = document.getElementById('log');
+  logEl.style.display = 'block';
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  const t = new Date().toTimeString().slice(0,8);
+  line.innerHTML = `<span class="log-t">${t}</span><span class="log-${type}">${msg}</span>`;
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+</script>
+</body>
+</html>
